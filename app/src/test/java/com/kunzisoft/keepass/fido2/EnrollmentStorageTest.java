@@ -27,8 +27,9 @@ public class EnrollmentStorageTest {
                 for(int event=xml.next();event!=org.xmlpull.v1.XmlPullParser.END_DOCUMENT;event=xml.next()){
                     if(event!=org.xmlpull.v1.XmlPullParser.START_TAG)continue;
                     String name=xml.getName();
+                    assertFalse("Exclusion-only policy must not mix includes",name.equals("include"));
                     if(name.equals("cloud-backup")||name.equals("device-transfer")||name.equals("full-backup-content"))mode=name;
-                    if(name.equals("exclude")&&"file".equals(xml.getAttributeValue(null,"domain"))&&"fido2-v1/".equals(xml.getAttributeValue(null,"path")))modes.add(mode);
+                    if(name.equals("exclude")&&"file".equals(xml.getAttributeValue(null,"domain"))&&".".equals(xml.getAttributeValue(null,"path")))modes.add(mode);
                 }
             }
         }
