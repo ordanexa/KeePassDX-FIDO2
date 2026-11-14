@@ -55,13 +55,7 @@ public final class FidoUnlock {
             }
         }
     };
-    private AtomicFile file(String db)throws Exception{
-        byte[] hash=MessageDigest.getInstance("SHA-256").digest(db.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        StringBuilder name=new StringBuilder();for(byte b:hash)name.append(String.format("%02x",b&255));
-        File directory=new File(activity.getNoBackupFilesDir(),"fido2-v1");
-        if(!directory.isDirectory()&&!directory.mkdirs())throw new IOException("Cannot create private enrollment storage");
-        return new AtomicFile(new File(directory,name+".cbor"));
-    }
+    private AtomicFile file(String db)throws Exception{ return EnrollmentStorage.file(activity,db); }
     public void begin(Uri uri,char[] suppliedPassword,boolean enroll){
         if(busy){if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("A token operation is already running.");return;}
         cancel();
