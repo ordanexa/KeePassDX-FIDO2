@@ -15,7 +15,7 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Activity-scoped coordinator. Plaintext never enters an Intent, saved state, or file. */
+/** Activity-scoped coordinator. No new plaintext persistence; unlock uses the existing KeePassDX pipeline. */
 @TargetApi(26)
 public final class FidoUnlock {
     public interface Callback { void unlock(char[] password); }
@@ -34,6 +34,7 @@ public final class FidoUnlock {
     private AlertDialog dialog;
     private UnlockRecord pending;
     private boolean waitingDatabase;
+    private byte[] proofKey, passwordProof;
 
     public FidoUnlock(Activity activity,Callback callback) {
         this.activity=activity;this.callback=callback;
@@ -140,6 +141,11 @@ public final class FidoUnlock {
                 main.post(()->{
                     if(request!=generation||activity.isFinishing()){Arrays.fill(result,'\0');return;}
                     if(dialog!=null){dialog.dismiss();dialog=null;}
+                    try {
+                        proofKey=Crypto.random(32);
+                        byte[] encoded=UnlockRecord.encodeChars(result);
+                        try { passwordProof=Crypto.hmac(proofKey,encoded); } finally { Crypto.wipe(encoded); }
+                    } catch(Exception error) { Arrays.fill(result,'\0');cancel();message("Cannot verify pending enrollment.");return; }
                     pending=candidate;waitingDatabase=true;
                     // Ownership of result transfers to KeePassDX's existing credential pipeline.
                     callback.unlock(result);
@@ -148,8 +154,15 @@ public final class FidoUnlock {
             finally{Crypto.wipe(pin);Crypto.wipe(secret);if(unlocked!=null)Arrays.fill(unlocked,'\0');if(enrollmentPassword!=null)Arrays.fill(enrollmentPassword,'\0');}
         });
     }
-    public void databaseResult(boolean success){
+    public void databaseResult(Uri completedDatabase,char[] completedPassword,boolean success){
         if(!waitingDatabase)return;
+        byte[] encoded=null,proof=null;
+        try {
+            if(completedDatabase==null||!database.equals(completedDatabase.toString())||completedPassword==null) { cancel();return; }
+            encoded=UnlockRecord.encodeChars(completedPassword);proof=Crypto.hmac(proofKey,encoded);
+            if(!MessageDigest.isEqual(passwordProof,proof)){cancel();return;}
+        }catch(Exception error){cancel();return;}
+        finally{Crypto.wipe(encoded);Crypto.wipe(proof);}
         UnlockRecord record=pending;pending=null;waitingDatabase=false;
         try{
             if(success&&record!=null){
@@ -172,6 +185,7 @@ public final class FidoUnlock {
     }
     public void cancel(){
         generation++;busy=false;waitingDatabase=false;pending=null;device=null;
+        Crypto.wipe(proofKey);Crypto.wipe(passwordProof);proofKey=null;passwordProof=null;
         UsbIo active=io;if(active!=null)active.close();
         if(password!=null)Arrays.fill(password,'\0');password=null;
         if(dialog!=null){dialog.setOnCancelListener(null);dialog.dismiss();dialog=null;}

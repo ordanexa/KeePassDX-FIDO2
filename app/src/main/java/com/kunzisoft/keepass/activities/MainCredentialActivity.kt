@@ -182,6 +182,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
         // Encapsulate function to load database
         fun loadDatabase() {
+            fidoUnlock?.cancel()
             mMainCredentialViewModel.loadDatabase(
                 mainCredential = mainCredentialView.getMainCredential(),
                 specialMode = mSpecialMode
@@ -386,7 +387,11 @@ class MainCredentialActivity : DatabaseModeActivity() {
         super.onDatabaseActionFinished(database, actionTask, result)
         when (actionTask) {
             ACTION_DATABASE_LOAD_TASK -> {
-                fidoUnlock?.databaseResult(result.isSuccess)
+                fidoUnlock?.databaseResult(
+                    result.data?.getParcelableCompat<Uri>(DATABASE_URI_KEY),
+                    result.data?.getParcelableCompat<MainCredential>(MAIN_CREDENTIAL_KEY)?.password,
+                    result.isSuccess
+                )
                 if (result.isSuccess) {
                     mMainCredentialViewModel.onDatabaseRetrieved(database)
                 } else {
@@ -449,6 +454,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     override fun onNewIntent(intent: Intent?) {
+        fidoUnlock?.cancel()
         super.onNewIntent(intent)
         getUriFromIntent(intent)
     }
@@ -481,6 +487,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     private fun onCredentialEncrypted(cipherEncryptDatabase: CipherEncryptDatabase) {
+        fidoUnlock?.cancel()
         // Load the database if password is registered with biometric
         mMainCredentialViewModel.loadDatabase(
             mainCredential = mainCredentialView.getMainCredential(),
@@ -490,6 +497,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     private fun onCredentialDecrypted(cipherDecryptDatabase: CipherDecryptDatabase) {
+        fidoUnlock?.cancel()
         // Load the database if password is retrieve from biometric
         // Retrieve from biometric
         val tempMainCredential = mainCredentialView.getMainCredential()
