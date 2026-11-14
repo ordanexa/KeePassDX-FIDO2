@@ -1,66 +1,54 @@
 # FIDO2 hmac-secret unlock prototype
 
-**Status:** V1 implementation in progress; no device validation of this fork yet.
+**Status:** V1 test APK built and signed; APK signature and checksum verified. Physical device acceptance is pending.
 
-## V1 decision record (2026-11-14)
+## V1 scope
 
-- User approved USB-C, Token2 PIN+ Dual, password-only unchanged KDBX, and manual password recovery. NFC and key-file integration are deferred.
-- The private `pascalep/fidoparole-android-reader` README and `docs/VALIDATION.md` record USB device 349e:0024 and successful 0.1.2-test use on Samsung S24 and tablet. This proves the existing reader flow, not this fork's enrollment or unlock.
-- Reuse the reader's USB/HID, bounded CBOR and PIN protocol primitives, with a separate KDBX-specific credential and RP ID. Never access or modify FidoParole credentials or largeBlob storage.
-- KeyDriver source was inspected: response extras are `result` and `resultOpt`; its assertion response omits authenticatorData, which is needed for independent signature/UV verification. V1 therefore uses direct USB rather than adding a second trusted app.
-- Enrollment creates a non-discoverable ES256 credential with hmac-secret; PIN verification and presence are required. Retain the credential public key and verify subsequent assertion signatures, RP hash, UV/UP flags and credential ID.
-- Derive a purpose-specific AES-256-GCM key with HKDF-SHA256. Bind the version, database URI, credential ID and random salt as authenticated metadata. Keep the encrypted record in Android no-backup storage; never persist PIN or plaintext password.
-- Commit enrollment only after a successful KDBX unlock. Cancelled/failed replacement must preserve the previous record. App data loss or password change requires manual password recovery and enrollment again.
-- Existing signing identity is explicitly authorized by the user; do not generate a replacement or expose signing secrets. Hardware tests remain mandatory before using real data.
+USB-C, Token2 PIN+ Dual, password-only unchanged KDBX, manual master-password recovery. NFC, key files and concurrent backup-token enrollment are deferred.
 
-## Agreed behavior
+The token PIN authorizes a CTAP operation; it is not a KDBX decryption key. The hmac-secret output derives an AES-256-GCM key through HKDF-SHA256, protecting a local copy of the master password. KeePassDX supplies the recovered password to its existing database-loading pipeline. The KDBX credentials remain unchanged, so desktop clients can still use the ordinary master password.
 
-- The Android app asks for the hardware key and its PIN, then unlocks the database.
-- The FIDO2 `hmac-secret` output protects a locally stored copy of the KeePass master password. KeePassDX then supplies that password to its existing KDBX unlock path.
-- Version 1 keeps the KDBX credentials unchanged. A database opened this way remains openable in KeePassXC with its ordinary master password.
-- A key file can be added later as a normal KDBX factor. Once added to the database, the same key file is also required by KeePassXC.
-- V1 supports one token enrollment per database URI. Recovery is the independently retained master password; concurrent backup-token enrollment is deferred.
+The integration is in MainCredentialActivity, not the KDBX hardware-key component. Direct USB transport validates assertion signatures, credential ID, RP hash and UV/UP flags. The separate RP ID is keepassdx-fido2.ordanexa.com.
 
-The authenticator PIN authorizes the CTAP operation; it is not itself the KDBX password or a substitute for the hmac-secret output. See the [FIDO CTAP specification](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html).
+Enrollment creates a non-discoverable credential. The encrypted record binds its version, database URI, credential ID, public key and salt. It is stored atomically under noBackupFilesDir/fido2-v1 only after the matching database/password load succeeds. Failed replacement preserves the existing enrollment. PINs and plaintext passwords are not persisted by this integration.
 
-## Findings in the upstream code
+## Test flow
 
-- KeePassDX already has a `HardwareKey` abstraction and a `MasterCredential` composition path for password, key file, and hardware-key data.
-- `HardwareKey.FIDO2_SECRET` and its launcher path are commented out as unfinished. The current YubiKey route uses a separate challenge-response driver intent.
-- KeePassDX's Android Credential Manager passkey provider contains PRF extension handling. It computes output from a PRF secret stored with a passkey entry; this is separate from directly talking to a USB/NFC security key over CTAP.
-- The older GitHub Key Driver mirror and the 0.1.2 tag show SoloKey hmac-secret integration as unfinished. The current [Kunzisoft GitLab KeyDriver documentation](https://gitlab.com/kunzisoft/android-hardware-key-driver) describes hmac-secret over USB or NFC for compatible authenticators with `clientPin` or built-in user verification. It documents `HMAC_SECRET_CREATE` and `HMAC_SECRET_CHALLENGE_RESPONSE` intents. The tags page lists 0.2.0 as “Compose & Hmac-Secret”.
+1. Install KeePassDX FIDO2 Test on Android 13 or later.
+2. Select a disposable password-only KDBX and enter its master password.
+3. Connect the USB token, choose **Enroll USB token**, grant USB permission, enter the token PIN and touch when prompted.
+4. After successful enrollment, lock the database and choose **Unlock with USB token**.
+5. Verify saving, app restart and another unlock.
+6. Verify the same KDBX opens in KeePassXC with its unchanged master password.
 
-The initial KeyDriver plan has been superseded by the direct USB decision above. The inspected driver source returns `result` and `resultOpt`, but not the assertion authenticatorData required for independent signature verification. V1 does not call KeyDriver.
+One enrollment is stored per database URI per Android installation. **Remove token enrollment** deletes the local encrypted record only. App-data loss or a changed master password requires manual recovery and enrollment again.
 
-Do not simply enable `FIDO2_SECRET` in the KDBX master-credential composition path: that would make the hardware response part of the database's master key and conflict with the agreed desktop-unlock behavior.
+Unplugging cancels an in-progress token operation. It does not close an already unlocked database; ordinary KeePassDX session-lock behavior remains in effect.
 
-## Scope and remaining checks
+## Automated validation
 
-- Direct USB transport, authenticated local storage and the credential-screen integration are implemented below.
-- Exact token firmware and physical acceptance of this fork remain to be verified on the user's device. Prior reader success is not evidence that this APK works.
-- NFC, key-file support and concurrent backup-token enrollment are deferred.
-- Signing uses the authorized existing identity through secrets in the private reader repository. No signing key or password is stored in this public fork.
+Source commit: a4c23889c64863ada6545861d8755e01ab3bc31b.
 
-## Implemented test flow
+The independent Python CTAP simulator passed 210 checks: PIN v1/v2, enrollment, stable secret, password roundtrip, ciphertext tampering, wrong PIN, low retry count, missing extension, missing UV/UP, wrong RP/credential, invalid signature and replay rejection. Run tests/fido2/run.sh with its documented Python dependencies and JDK 21.
 
-In the FIDO2 test variant, select a disposable password-only KDBX. Enter its master password and choose **Enroll USB token** from the toolbar menu. Connect exactly one Token2 PIN+ Dual, grant USB permission, enter its PIN and touch when prompted. Enrollment creates a new non-discoverable credential; existing FidoParole data is not touched. After successful database load, an atomic encrypted record is stored in `noBackupFilesDir/fido2-v1`.
+The Android release build passed, including resource linking and lintVital. The signed artifact was downloaded and independently checked with apksigner and zipalign. Its checksum matched the build artifact manifest.
 
-Lock the database, select **Unlock with USB token**, enter the token PIN and touch again. **Remove token enrollment** removes only the local encrypted record. V1 keeps one enrollment per database URI per Android installation; enrolling a replacement requires the master password and does not replace the old record until database unlock succeeds. A second token is not yet enrolled concurrently. Recovery is the master password.
+- APK: keepassdx-fido2-0.1.0-test.apk
+- SHA-256: 6ad6e2c1eef4a06fa87d4d5ac9027a36ad4dadd7a1db893fe88187306cc2d4fa
+- Version: 4.5.8-fido2-0.1.0-test / versionCode 45800
+- Package: com.kunzisoft.keepass.fido2
+- minSdk 33 / targetSdk 36
+- App backups disabled; separate installation from standard KeePassDX.
+- No signing keys or passwords are stored in this repository.
 
-The test build requires Android 13+, identifies itself as **KeePassDX FIDO2 Test**, and uses package `com.kunzisoft.keepass.fido2`. Existing KeePassDX database-session locking behavior is unchanged: unplugging the token cancels an in-progress token operation, but does not automatically close an already unlocked database. Lock it using KeePassDX as usual.
+## Pending device acceptance
 
-## Validation
+- Correct enrollment; lock/unlock, save, restart and unlock again.
+- Desktop unlock of the same KDBX using the master password.
+- Incorrect enrollment password preserves the previous record.
+- Cancel, rotate, background and USB disconnect during token operations.
+- Wrong token and modified local record fail closed.
+- Manual recovery after password changes or app-data loss.
+- No automatic PIN retries; do not deliberately exhaust the token retry counter.
 
-Run `tests/fido2/run.sh` with JDK 21 and the Python dependencies in `tests/fido2/requirements.txt`. `FIDO_TEST_PYTHON` can select a dedicated Python venv. The independent Python simulator uses python-fido2 PIN protocols and cryptography ECDSA/HKDF/AES, rather than the Java implementation. Initial run passed 210 checks including PIN v1/v2, enrollment, stable secret, password roundtrip, ciphertext tampering, wrong PIN, low retry count, absent extension, missing UV/UP, wrong RP/credential, wrong signature and replay rejection. Java sources also compile against Android API 35. Full APK build and hardware acceptance remain pending until explicitly recorded below.
-
-## Required device acceptance
-
-- Enrollment with a correct password, then lock/unlock, save, restart, unlock again.
-- Open the same KDBX in KeePassXC with its unchanged master password.
-- Wrong database password during enrollment must preserve the previous local record.
-- Cancel, rotate, background the app, and unplug during PIN/enrollment/unlock; no delayed unlock or replacement record may occur.
-- Wrong token and modified record must fail closed; manual password must still work.
-- Do not deliberately exhaust token PIN retries. No automatic PIN retries are implemented.
-- Test password changes and app-data loss using disposable data; recover with the manual password and enroll again.
-
-This is an experimental build, not a security-audited release. Java/Android cannot guarantee complete memory zeroization. No real vaults or credentials are part of the tests.
+This is an experimental build, not a security-audited release. No hardware or emulator acceptance test has been performed for this fork. Java/Android cannot guarantee complete memory zeroization.
