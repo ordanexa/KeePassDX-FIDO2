@@ -14,7 +14,7 @@ Enrollment creates a non-discoverable credential. The encrypted record binds its
 
 ## Test flow
 
-1. Install KeePassDX FIDO2 Test on Android 13 or later.
+1. Install KeePassDX FIDO2 on Android 13 or later (called KeePassDX FIDO2 Test before 0.1.5).
 2. Select a disposable password-only KDBX and enter its master password.
 3. Connect the USB token, choose **Enroll USB token**, grant USB permission, enter the token PIN and touch when prompted.
 4. After successful enrollment, lock the database and choose **Unlock with USB token**.
