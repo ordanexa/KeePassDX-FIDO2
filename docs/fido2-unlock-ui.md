@@ -20,4 +20,4 @@ Source commit: `390fa9f0bf5cd6a771abb8a76456b131450f9ca0`.
 - APK: `keepassdx-fido2-0.1.3-test.apk`.
 - SHA-256: `9791427add3b00b0d8c86e6d7728b99c4202780dd6b6a1779437169009320326`.
 - Existing enrollment format and location are unchanged from 0.1.2. Install as an update.
-- Device acceptance remains pending for automatic USB mode switching, inline PIN submission, keyboard Done, master-password menu override and enrollment with an attached token.
+- The owner reported that the updated login UI works correctly on their device. Individual edge cases (including lifecycle/cancellation and every keyboard path) have not been independently revalidated.

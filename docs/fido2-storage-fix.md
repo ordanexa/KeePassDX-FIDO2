@@ -17,4 +17,4 @@ Source commit: `00df392aa6ff38e8852ed1a003a16163fbe2ee70`.
 - Release build and lint passed. The downloaded APK's checksum, source marker, versionCode 45802, signature, ZIP alignment and compiled backup rules were verified.
 - APK: `keepassdx-fido2-0.1.2-test.apk`.
 - SHA-256: `f1d11854c2d17a7a7bf92ac7673ea3ba103745447adbb1b38e00a7d9278843a5`.
-- Physical-device validation remains pending. Install over the existing test app, enroll once again, lock the database, fully close the app and verify token unlock after restarting.
+- The owner reported that enrollment and subsequent unlock work after this fix. This is user-reported device acceptance, not an independently repeated full recovery/negative-test matrix.

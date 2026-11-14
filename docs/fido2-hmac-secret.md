@@ -1,6 +1,6 @@
 # FIDO2 hmac-secret unlock prototype
 
-**Status:** V1 test APK built and signed; APK signature and checksum verified. Physical device acceptance is pending.
+**Status:** Historical protocol notes for the V1 implementation. Current setup, downloads and supported scope are in the [README](../README.md). The owner has reported working enrollment, persistent unlock and the 0.1.3 login UI on their device; broader negative/recovery testing remains open.
 
 ## V1 scope
 
@@ -10,7 +10,7 @@ The token PIN authorizes a CTAP operation; it is not a KDBX decryption key. The 
 
 The integration is in MainCredentialActivity, not the KDBX hardware-key component. Direct USB transport validates assertion signatures, credential ID, RP hash and UV/UP flags. The separate RP ID is keepassdx-fido2.ordanexa.com.
 
-Enrollment creates a non-discoverable credential. The encrypted record binds its version, database URI, credential ID, public key and salt. It is stored atomically under noBackupFilesDir/fido2-v1 only after the matching database/password load succeeds. Failed replacement preserves the existing enrollment. PINs and plaintext passwords are not persisted by this integration.
+Enrollment creates a non-discoverable credential. The encrypted record binds its version, database URI, credential ID, public key and salt. It is stored atomically under filesDir/fido2-v1 (since 0.1.2; the original noBackupFilesDir location was incorrect) only after the matching database/password load succeeds. Failed replacement preserves the existing enrollment. PINs and plaintext passwords are not persisted by this integration.
 
 ## Test flow
 
@@ -51,7 +51,7 @@ The Android release build passed, including resource linking and lintVital. The 
 - Manual recovery after password changes or app-data loss.
 - No automatic PIN retries; do not deliberately exhaust the token retry counter.
 
-This is an experimental build, not a security-audited release. No hardware or emulator acceptance test has been performed for this fork. Java/Android cannot guarantee complete memory zeroization.
+This is an experimental build, not a security-audited release. The owner has reported successful physical-device use; this is not independent security review or comprehensive device acceptance. Java/Android cannot guarantee complete memory zeroization.
 
 ## 0.1.1 enrollment authorization fix
 
