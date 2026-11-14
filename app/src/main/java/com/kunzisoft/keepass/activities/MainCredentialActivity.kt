@@ -99,6 +99,8 @@ import java.nio.CharBuffer
 
 class MainCredentialActivity : DatabaseModeActivity() {
 
+    private var fidoUnlock: com.kunzisoft.keepass.fido2.FidoUnlock? = null
+
     // Views
     private var toolbar: Toolbar? = null
     private var filenameView: TextView? = null
@@ -148,6 +150,17 @@ class MainCredentialActivity : DatabaseModeActivity() {
         confirmButtonView = findViewById(R.id.activity_password_open_button)
         infoContainerView = findViewById(R.id.activity_password_info_container)
         coordinatorLayout = findViewById(R.id.activity_password_coordinator_layout)
+
+        if (com.kunzisoft.keepass.BuildConfig.BUILD_VERSION == "fido2" && Build.VERSION.SDK_INT >= 26) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            fidoUnlock = com.kunzisoft.keepass.fido2.FidoUnlock(this) { recoveredPassword ->
+                mainCredentialView.populatePasswordTextView(null)
+                mMainCredentialViewModel.loadDatabase(
+                    mainCredential = MainCredential(password = recoveredPassword),
+                    specialMode = mSpecialMode
+                )
+            }
+        }
 
         mainCredentialView.keyFileSelectionView.setOpenFileClickListener(this, openFileResultLauncher)
 
@@ -373,6 +386,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         super.onDatabaseActionFinished(database, actionTask, result)
         when (actionTask) {
             ACTION_DATABASE_LOAD_TASK -> {
+                fidoUnlock?.databaseResult(result.isSuccess)
                 if (result.isSuccess) {
                     mMainCredentialViewModel.onDatabaseRetrieved(database)
                 } else {
@@ -518,6 +532,11 @@ class MainCredentialActivity : DatabaseModeActivity() {
         val inflater = menuInflater
         // Read menu
         inflater.inflate(R.menu.open_file, menu)
+        if (fidoUnlock != null) {
+            menu.add(0, FIDO_UNLOCK, 0, "Unlock with USB token")
+            menu.add(0, FIDO_ENROLL, 1, "Enroll USB token")
+            menu.add(0, FIDO_REMOVE, 2, "Remove token enrollment")
+        }
         if (mMainCredentialViewModel.isReadOnlyToggleAllowed()) {
             changeDatabaseReadModeIcon(menu.findItem(R.id.menu_open_file_read_mode_key))
         } else {
@@ -650,6 +669,36 @@ class MainCredentialActivity : DatabaseModeActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
 
         when (item.itemId) {
+            FIDO_UNLOCK, FIDO_ENROLL -> {
+                val credentials = mainCredentialView.getMainCredential()
+                if (credentials.keyFileUri != null || credentials.hardwareKey != null) {
+                    credentials.clear()
+                    Toast.makeText(this, "FIDO2 V1 supports password-only databases.", Toast.LENGTH_LONG).show()
+                    return true
+                }
+                val enroll = item.itemId == FIDO_ENROLL
+                val secret = if (enroll) credentials.password?.copyOf() else null
+                credentials.clear()
+                if (enroll) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Enroll USB token")
+                        .setMessage("Use a test database. This replaces any local enrollment only after successful database unlock. Keep the master password for recovery.")
+                        .setNegativeButton(android.R.string.cancel) { _, _ -> secret?.fill('\u0000') }
+                        .setOnCancelListener { secret?.fill('\u0000') }
+                        .setPositiveButton("Enroll") { _, _ ->
+                            mainCredentialView.populatePasswordTextView(null)
+                            fidoUnlock?.begin(mMainCredentialViewModel.databaseFileUri, secret?.copyOf(), true)
+                        }.create().also { confirmation ->
+                            confirmation.setOnDismissListener { secret?.fill('\u0000') }
+                            confirmation.show()
+                        }
+                } else fidoUnlock?.begin(mMainCredentialViewModel.databaseFileUri, null, false)
+                return true
+            }
+            FIDO_REMOVE -> {
+                fidoUnlock?.remove(mMainCredentialViewModel.databaseFileUri)
+                return true
+            }
             android.R.id.home -> finish()
             R.id.menu_open_file_read_mode_key -> {
                 mMainCredentialViewModel.toggleReadOnly()
@@ -683,7 +732,13 @@ class MainCredentialActivity : DatabaseModeActivity() {
         return super.onOptionsItemSelected(item)
     }
 
+    override fun onStop() {
+        fidoUnlock?.cancel()
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        fidoUnlock?.close()
         super.onDestroy()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             mDeviceUnlockViewModel?.disconnect()
@@ -691,6 +746,9 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     companion object {
+        private const val FIDO_UNLOCK = 0x7f0f7101
+        private const val FIDO_ENROLL = 0x7f0f7102
+        private const val FIDO_REMOVE = 0x7f0f7103
 
         private val TAG = MainCredentialActivity::class.java.name
 

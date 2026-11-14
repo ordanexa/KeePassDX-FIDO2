@@ -1,0 +1,2 @@
+fido2 @ git+https://github.com/Yubico/python-fido2.git@9d5991d6785e20bd487c8b6c996df6ce2226642a
+cryptography==50.0.0
