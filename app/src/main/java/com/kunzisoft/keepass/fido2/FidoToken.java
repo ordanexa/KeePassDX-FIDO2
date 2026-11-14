@@ -35,13 +35,14 @@ final class FidoToken {
             String reason;
             switch (status) {
                 case 0x31: reason = "Incorrect PIN. No automatic retry."; break;
+                case 0x33: reason = "PIN authorization rejected. Enrollment/unlock stopped; no automatic retry."; break;
                 case 0x32: reason = "PIN blocked. Do not reset the token."; break;
                 case 0x34: reason = "PIN temporarily blocked. Reconnect the token."; break;
                 case 0x2e: reason = "This token has no matching credential."; break;
                 case 0x2f: reason = "Touch cancelled or timed out."; break;
                 default: reason = "Token operation failed.";
             }
-            throw new IOException(String.format("CTAP 0x%02x: %s", status, reason));
+            throw new IOException(String.format("CTAP 0x%02x (command 0x%02x): %s", status, cmd, reason));
         }
         return reply.length == 1 ? Cbor.map() : Cbor.decode(Arrays.copyOfRange(reply,1,reply.length));
     }
@@ -71,7 +72,7 @@ final class FidoToken {
                     try { encrypted = a.encrypt(shortHash); } finally { Crypto.wipe(digest); Crypto.wipe(shortHash); }
                     boolean scoped = Boolean.TRUE.equals(Cbor.get(options,"pinUvAuthToken"));
                     Map<Object,Object> args = Cbor.map(1,version,2,scoped ? 9 : 5,3,a.publicKey,6,encrypted);
-                    if (scoped) { args.put(9L,enroll ? 3L : 2L); args.put(10L,RP); }
+                    if (scoped) { args.put(9L,enroll ? 1L : 2L); args.put(10L,RP); }
                     token = a.decrypt(Cbor.bytes(Cbor.get(command(6,args),2)));
                     if ((version == 2 && token.length != 32) || (version == 1 && token.length != 16 && token.length != 32))
                         throw new IOException("Invalid PIN token");
@@ -85,6 +86,16 @@ final class FidoToken {
             try { return Arrays.copyOf(mac,16); } finally { Crypto.wipe(mac); }
         }
         public void close() { Crypto.wipe(token); token = null; }
+    }
+
+    // Each UV operation consumes its authorization. Reauthenticate for the next
+    // operation instead of reusing a token whose UV flag/permissions were cleared.
+    // PIN bytes remain only with the caller for this bounded flow and are wiped there.
+    Credential create(byte[] pin) throws Exception {
+        try (Session session = new Session(pin.clone(), true)) { return create(session); }
+    }
+    byte[] get(byte[] pin, Credential credential, byte[] salt) throws Exception {
+        try (Session session = new Session(pin.clone(), false)) { return get(session, credential, salt); }
     }
 
     Credential create(Session session) throws Exception {

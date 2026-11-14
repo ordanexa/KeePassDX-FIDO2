@@ -52,3 +52,11 @@ The Android release build passed, including resource linking and lintVital. The 
 - No automatic PIN retries; do not deliberately exhaust the token retry counter.
 
 This is an experimental build, not a security-audited release. No hardware or emulator acceptance test has been performed for this fork. Java/Android cannot guarantee complete memory zeroization.
+
+## 0.1.1 enrollment authorization fix
+
+MakeCredential consumes user-verification state and token permissions. Version 0.1.0 incorrectly reused that authorization for the following GetAssertion. Version 0.1.1 obtains a fresh, operation-scoped authorization for each command, without retrying failed PIN authentication. The PIN remains only in memory for the bounded enrollment flow and is wiped afterwards. UV/signature checks remain mandatory.
+
+The simulator now consumes authorization and permissions after each successful operation. Before the fix, this reproduced CTAP 0x33; a regression test explicitly verifies stale authorization is rejected. Tests also cover rejection of the second authorization request. This establishes a protocol bug and its correction, not physical-device acceptance. Error messages now include the failed CTAP command.
+
+Reference: [CTAP 2.3 MakeCredential and GetAssertion algorithms](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html).

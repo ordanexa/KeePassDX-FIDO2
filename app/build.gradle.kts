@@ -92,7 +92,8 @@ android {
         }
         create("fido2") {
             minSdk = 33
-            versionNameSuffix = "-fido2-0.1.0-test"
+            versionNameSuffix = "-fido2-0.1.1-test"
+            versionCode = 45801
             dimension = "version"
             applicationIdSuffix = ".fido2"
             buildConfigField("String", "BUILD_VERSION", "\"fido2\"")

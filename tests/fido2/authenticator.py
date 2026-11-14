@@ -16,6 +16,9 @@ cred_id=b'synthetic-credential-id'
 cred_random=b'R'*32
 agreement_private=None
 pin_attempts=0
+authorized=False
+completed_operations=0
+permissions=0
 
 def public_cose(key):
     p=key.public_key().public_numbers()
@@ -26,7 +29,7 @@ def shared(peer):
     return proto.kdf(agreement_private.exchange(ec.ECDH(),pk))
 
 def respond(raw):
-    global agreement_private,pin_attempts
+    global agreement_private,pin_attempts,authorized,completed_operations,permissions
     cmd=raw[0]; a=cbor.decode(raw[1:]) if len(raw)>1 else {}
     if cmd==4:
         return {1:['FIDO_2_1'],2:[] if mode=='no_hmac' else ['hmac-secret'],3:b'A'*16,
@@ -39,14 +42,19 @@ def respond(raw):
             p=public_cose(agreement_private);p[3]=-25
             return {1:p}
         assert a[2]==(9 if version==2 else 5),'PIN write or unsupported command'
-        if version==2:assert a[9] in (2,3) and a[10]==RP
+        if version==2:assert a[9] in (1,2) and a[10]==RP
         pin_attempts+=1
-        assert pin_attempts==1,'Automatic PIN retry'
+        assert pin_attempts==completed_operations+1,'Automatic PIN retry'
         s=shared(a[3])
         assert proto.decrypt(s,a[6])==hashlib.sha256(PIN).digest()[:16]
         if mode=='wrong_pin':return 0x31
+        if mode=='reauth_rejected' and pin_attempts==2:return 0x33
+        permissions=a.get(9,3)
+        authorized=True
         return {2:proto.encrypt(s,token)}
     if cmd==1:
+        if not authorized or not permissions & 1:return 0x33
+        authorized=False;permissions=0;completed_operations+=1
         assert a[2]['id']==RP and a[7]=={'rk':False} and a[6]=={'hmac-secret':True}
         assert a[4]==[{'type':'public-key','alg':-7}]
         assert a[9]==version and hmac.compare_digest(a[8],proto.authenticate(token,a[1]))
@@ -54,6 +62,8 @@ def respond(raw):
         ad=hashlib.sha256(RP.encode()).digest()+bytes([flags])+b'\0'*4+b'A'*16+len(cred_id).to_bytes(2,'big')+cred_id+cbor.encode(public_cose(credential))+cbor.encode({'hmac-secret':True})
         return {1:'packed',2:ad,3:{'alg':-7,'sig':credential.sign(ad+a[1],ec.ECDSA(hashes.SHA256()))}}
     if cmd==2:
+        if not authorized or not permissions & 2:return 0x33
+        authorized=False;permissions=0;completed_operations+=1
         assert a[1]==RP and a[5]=={'up':True}
         assert a[3]==[{'type':'public-key','id':cred_id}]
         assert a[7]==version and hmac.compare_digest(a[6],proto.authenticate(token,a[2]))

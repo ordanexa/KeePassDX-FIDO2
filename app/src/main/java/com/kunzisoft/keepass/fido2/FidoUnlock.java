@@ -119,11 +119,10 @@ public final class FidoUnlock {
                 if(request!=generation){transport.close();return;}
                 try(Hid hid=new Hid(transport)){
                     FidoToken token=new FidoToken(hid,text->main.post(()->{if(request==generation&&dialog!=null)dialog.setMessage(text);}));
-                    try(FidoToken.Session session=token.new Session(pin,enroll)){
                         if(enroll){
-                            FidoToken.Credential credential=token.create(session);
+                            FidoToken.Credential credential=token.create(pin);
                             byte[] salt=Crypto.random(32);
-                            secret=token.get(session,credential,salt);
+                            secret=token.get(pin,credential,salt);
                             record=UnlockRecord.seal(db,credential,salt,secret,enrollmentPassword);
                             // Verify authenticated encryption before attempting database load.
                             unlocked=record.open(secret);
@@ -131,10 +130,9 @@ public final class FidoUnlock {
                             AtomicFile storage=file(db);
                             if(storage.getBaseFile().length()>32768)throw new IOException("Enrollment record too large");
                             record=UnlockRecord.decode(db,storage.readFully());
-                            secret=token.get(session,record.credential,record.salt);
+                            secret=token.get(pin,record.credential,record.salt);
                             unlocked=record.open(secret);
                         }
-                    }
                 }finally{io=null;}
                 final char[] result=unlocked;unlocked=null;
                 final UnlockRecord candidate=enroll?record:null;

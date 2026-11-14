@@ -31,17 +31,17 @@ public final class FidoTest {
     }
 
     public static void main(String[] args)throws Exception{
-        for(String mode:new String[]{"v1","v2","wrong_pin","low_retries","no_hmac","create_no_uv","no_uv","no_up","wrong_rp","wrong_signature","wrong_id","replay"}){
+        for(String mode:new String[]{"v1","v2","reauth_rejected","wrong_pin","low_retries","no_hmac","create_no_uv","no_uv","no_up","wrong_rp","wrong_signature","wrong_id","replay"}){
             byte[] pin=Crypto.utf8("123456");
             try(Hid hid=new Hid(new Sim(mode))){
                 FidoToken token=new FidoToken(hid,s->{});
                 Attempt flow=()->{
-                    try(FidoToken.Session session=token.new Session(pin,true)){
-                        FidoToken.Credential credential=token.create(session);
-                        byte[] salt=Crypto.random(32),secret=token.get(session,credential,salt);
+                    try{
+                        FidoToken.Credential credential=token.create(pin);
+                        byte[] salt=Crypto.random(32),secret=token.get(pin,credential,salt);
                         char[] password="Test-ä-🔐-password".toCharArray();
                         UnlockRecord record=UnlockRecord.seal("content://test/database",credential,salt,secret,password);
-                        byte[] second=token.get(session,credential,salt);
+                        byte[] second=token.get(pin,credential,salt);
                         check(Arrays.equals(secret,second),"stable hmac-secret");
                         UnlockRecord read=UnlockRecord.decode(record.database,record.encode());
                         check(Arrays.equals(password,read.open(second)),"password roundtrip "+mode);
@@ -50,12 +50,21 @@ public final class FidoTest {
                         rejects(()->read.open(secret),"tampered ciphertext");
                         rejects(()->UnlockRecord.decode("content://other",record.encode()),"wrong database");
                         Crypto.wipe(secret);Crypto.wipe(second);Arrays.fill(password,'\0');
-                    }
+                    } finally { Crypto.wipe(pin); }
                 };
                 if(mode.equals("v1")||mode.equals("v2"))flow.run();else rejects(flow,"must reject "+mode);
                 check(Arrays.equals(pin,new byte[pin.length]),"PIN wiped");
             }
             System.out.println("PASS "+mode);
+        }
+        // Regression: the simulator must reject reuse after MakeCredential.
+        try(Hid hid=new Hid(new Sim("v2"))){
+            FidoToken token=new FidoToken(hid,s->{});
+            try(FidoToken.Session session=token.new Session(Crypto.utf8("123456"),true)){
+                FidoToken.Credential credential=token.create(session);
+                try { token.get(session,credential,Crypto.random(32));throw new AssertionError("Consumed authorization accepted"); }
+                catch(IOException expected){check(expected.getMessage().contains("0x33"),"consumed authorization returns 0x33");}
+            }
         }
         rejects(()->Cbor.decode(new byte[]{(byte)0xa2,1,2,1,3}),"duplicate CBOR keys");
         rejects(()->Cbor.decode(new byte[]{0,0}),"trailing CBOR");
