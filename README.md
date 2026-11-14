@@ -1,120 +1,102 @@
-# Android KeePassDX
+# KeePassDX FIDO2 — Ordanexa fork
 
-<img alt="KeePassDX Icon" src="https://raw.githubusercontent.com/Kunzisoft/KeePassDX/master/art/icon.png"> **Lightweight password safe and manager for Android**, KeePassDX allows editing encrypted data in a single file in KeePass format and fill in the forms in a secure way.
+<img src="art/fido2-icon.svg" width="128" alt="KeePassDX FIDO2 icon">
 
-<img alt="KeePassDX Screenshot" src="https://raw.githubusercontent.com/Kunzisoft/KeePassDX/master/art/screen.jpg" width="220">
+**Unlock your KeePass database on Android with a Token2 USB security key and its PIN.**
 
-### Features
-
- - **Passkeys** for authentication and **local storage of private keys**.
- - **Biometric recognition** for fast unlocking (fingerprint / face unlock / …).
- - **One-Time Password** management (HOTP / TOTP) for two-factor authentication (2FA).
- - **Autofill** for easy form filling with passwords.
- - **Magikeyboard** to efficiently fill in any field.
- - Create **encrypted database files**.
- - Organisation of credentials by **entry** and in **group** trees.
- - Allows opening and **copying URI / URL fields quickly**.
- - Dynamic **templates**  for each type of entry.
- - **History** of each entry.
- - Precise management of **settings**.
- - Material design with **themes**.
- - Support for **.kdb** and **.kdbx** files (version 1 to 4) with AES - Twofish - ChaCha20 - Argon2 algorithm.
- - **Compatible** with the majority of alternative programs (KeePass, KeePassXC, KeeWeb, …).
- - Code written in **native languages** (Kotlin / Java / JNI / C).
-
-KeePassDX is **open source** and **ad-free**.
-
-## What is KeePassDX?
-
-An alternative to remembering an endless list of passwords manually. This is made more difficult by **using different passwords for each account**. If you use one password everywhere and security fails only one of those places, it grants access to your e-mail account, website, etc, and you may not know about it or notice, before bad things happen.
-
-KeePassDX is a **local password and passkey manager for Android**, which helps you **manage your passwords in a secure way**. You can put all your passwords in one database, locked with a **master key** and/or a **keyfile**. You **only have to remember one single master password and/or select the keyfile** to unlock the whole database. The databases are encrypted using the best and **most secure encryption algorithms** currently known.
-
-## Small print?
-
-KeePassDX is under **open source GPL3 license**, meaning you can use, study, change and share it at will. Copyleft ensures it stays that way.
-From the full source, anyone can build, fork, and check whether for example the encryption algorithms are implemented correctly.
-There is **no advertising**.
-
-Do not worry, **the main features remain completely free**, no security features are reserved for a specific version; encryption and data protection are strictly the same for all users.
-
-KeePassDX is developed and maintained on a volunteer basis, so if you find the application useful and would like to support its development, there are several options available.
-
-## Contribution
-
-* Add features by making a **[pull request](https://help.github.com/articles/about-pull-requests/)**.
-* Help to **[translate](https://hosted.weblate.org/projects/keepass-dx/strings/)** KeePassDX to your language on [Weblate](https://hosted.weblate.org/projects/keepass-dx/).
-* **[Donate](https://www.keepassdx.com/#donation)** to encourage and finance design, deployment, ticket tracking, bug fixing, addition of new features, development and maintenance. You will then have access to a support version, KeePassDX Pro. (づ•ᴗ•)づ♡
-
-*Note : The support version provides access to optional visual styles that are accessible after a contribution (and a thank-you message ≽^•⩊•^≼) to encourage the work of this open source project!
-It does not improve safety and provides no functional advantage.
-If you contribute and do not have access to the styles, do not hesitate to contact the author at [contact@keepassdx.com](contact@keepassdx.com).*
+This is an independent, experimental modification of [Kunzisoft/KeePassDX](https://github.com/Kunzisoft/KeePassDX), based on KeePassDX **4.5.8**. It is not an official KeePassDX release.
 
 ## Download
 
-*[F-Droid](https://f-droid.org/packages/com.kunzisoft.keepass.libre/) is the recommended way of installing, a libre software project that verifies all the libraries and app code is libre software.*
+**[Download the tested 0.1.3 APK](https://github.com/ordanexa/KeePassDX/releases/download/v0.1.3-test/keepassdx-fido2-0.1.3-test.apk)** · [Release notes and downloads](https://github.com/ordanexa/KeePassDX/releases)
 
-| Source | Status | [Version](https://github.com/Kunzisoft/KeePassDX/wiki/FAQ#why-a-libre-and-free-version) |
-|--------|--------|---------|
-| [Google Play](https://play.google.com/store/apps/details?id=com.kunzisoft.keepass.free) | ![Google Play Release](https://img.shields.io/endpoint?color=blue&logo=google-play&logoColor=green&url=https%3A%2F%2Fplay.cuzi.workers.dev%2Fplay%3Fi%3Dcom.kunzisoft.keepass.free%26gl%3DUS%26hl%3Den%26l%3DGoogle%2520Play%26m%3D%24version) | Free + [Pro](https://play.google.com/store/apps/details?id=com.kunzisoft.keepass.pro) |
-| [F-Droid](https://f-droid.org/en/packages/com.kunzisoft.keepass.libre/) | ![F-Droid Version](https://img.shields.io/f-droid/v/com.kunzisoft.keepass.libre?logo=F-Droid&label=F-Droid) | Libre |
-| [IzzyOnDroid](https://apt.izzysoft.de/fdroid/index/apk/com.kunzisoft.keepass.free) | ![IzzyOnDroid Version](https://img.shields.io/endpoint?&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAADAFBMVEUA0////wAA0v8A0v8A0////wD//wAFz/QA0/8A0/8A0/8A0/8A0v///wAA0/8A0/8A0/8A0/8A0//8/gEA0/8A0/8B0/4A0/8A0/8A0/+j5QGAwwIA0//C9yEA0/8A0/8A0/8A0/8A0/8A0/+n4SAA0/8A0/8A0/+o6gCw3lKt7QCv5SC+422b3wC19AC36zAA0/+d1yMA0/8A0/+W2gEA0/+w8ACz8gCKzgG7+QC+9CFLfwkA0/8A0////wAA0/8A0/8A0/8A0/+f2xym3iuHxCGq5BoA1P+m2joI0vONyiCz3mLO7oYA0/8M1Piq3Ei78CbB8EPe8LLj9Ly751G77zWQ1AC96UYC0fi37CL//wAA0/8A0////wD//wCp3jcA0/+j3SGj2i/I72Sx4zHE8FLB8zak1kYeycDI6nRl3qEA0/7V7psA0v6WzTa95mGi2RvB5XkPy9zH5YJ3uwGV1yxVihRLiwdxtQ1ZkAf//wD//wD//wD//wD//wCn5gf//wD//wD//wD//wD//wAA0/+h4A3R6p8A0/+X1w565OD6/ARg237n9csz2vPz+gNt37V/vifO8HW68B/L6ZOCwxXY8KRQsWRzhExAtG/E612a1Rd/pTBpmR9qjysduKVhmxF9mTY51aUozK+CsDSA52T//wD//wAA0////wD//wBJ1JRRxFWjzlxDyXRc0pGT1wCG0CWB3VGUzSTh8h6c0TSr5CCJ5FFxvl6s4H3m8xML0/DA5CvK51EX1N+Y2gSt4Dag3ChE3fax2ki68yO57NF10FRZnUPl88eJxhuCxgCz5EOLwEGf1DFutmahzGW98x0W1PGk3R154MHE6bOn69qv3gy92oG90o+Hn07B7rhCmiyMwECv1nO+0pQfwrCo57xF2daXsVhKrEdenQAduaee1Bsjr42z5D9RoCXy+QNovXpy2Z5MtWDO/TiSukaF3UtE1K6j3B4YwLc5wXlzpyIK0u5zy3uJqg4pu5RTpkZmpVKyAP8A0wBHcExHcEyBUSeEAAABAHRSTlP///9F9wjAAxD7FCEGzBjd08QyEL39abMd6///8P/ZWAnipIv/cC6B//7////////L/1Dz/0D///////86/vYnquY3/v///5T//v///17///////////////84S3QNB/8L/////////////7r/////NP////9l/////wPD4yis/x7Ym2lWSP+em////0n////////v///////////////////7//7pdGN3Urr6/+v/6aT////+//H/o2P/1v+7r7jp4PM/3p4g////g///K///481LxO///v////9w////8v/////9/p3J///a+P9v/5KR/+n///+p/xf//8P//wAAe7FyaAAABCZJREFUSMdj+E8iYKBUgwIHnwQ3N7cEHxcH+///VayoAE0Dh41qR7aBnCIQ8MsJKHH9/99czYYMWlA0cIkJGjMgAKfq//9RNYzIgLcBWYOTiCgDMhDn+B9bh6LebiWyH6L5UZQzONoAHWSHoqEpDkkDsyKqelv1//9rG1HUN9YihZK9AKp6BkG+/6xNqA5ajhSsCkrIipmYGGRa//9vQXVQXSySBnkWJOUMfn5Myuz/G3hR1NdEIUUchwiy+bkTsg4dbW/fu6W/e1c3XMMy5JiOZkFxUFZo74mgKTqaKXu0+2HqVwkja3BH9kFu361JwcHTfPJD4mdfe8ULAdVRyGlJAcVFfg+CQOozZ4XrJ85+JgwBsVXIGriQw5Tp4ZScezd8JiWnBupru30qwJZa+ZAjmWlC8fUZM4qB6kPnLNSPLMWqQQ5ZQ5aOzs1HmamBaQHzFs6y+qAmJCTE8f9/QgKSBg4DJPWc6zVDQkIC09JkZSPD38kukpExFpT4z67uYI/QwCOOCCK/izvu5CWl6AcEWMnKWml7LWbKZfH9/99UkknQHhGsynDz+65eWXv3/JmJrq5eXienVlRUfH/z8VvCf45soKQIH1yDEQsszrp6gwq9C73T87xcXadKl5TkFev4A/2tygmSBqYXqAYJmK+ZuoJydDR1vP09DA0NOy2kpdML81+U/heCpH1JU3jig7lJ5nKOT4i/t6ZHkqGzs4lJmIVHfrj+JR4HqLQSD0yDkCNEpGNn5ix9D03/eJdElTZdKV2TpNOhkwt8YUlNUgimgV0dLMBvf1gz1MolPd5FRcVNSkpDQ8owJeBCDyIhrIDnOD5QcuIU+3/2QKSs9laQ+noNLS0zLWdtqyP7mBAFAw88TwsJgMuJYweBGjYngtWbmeuZOW+bvNQToUFOAlFqOBk4Ov3/L7Z60/aN0p1tUhpa5nqWlub7C3p2I9QzyAghlUvczOz/1fhzPT3XSIfpSmmYAdVbmm1gV0dSz8DSilpUQsqCddIWIA3meuZaJqdMJZEzl6gRqgZIWZAxUdoizERXN8yi5MltcZTChzMaRQM3JNUWHS8rL/+yaPGvMmvr5ywoGoxtkDWwQ+Pb89ycBeWfGSJeL/la+RS1eOPnRtbQKgMRjZg+t8x6PkP273nWQAoFOPAgaeAThKXAmXMrK39Kmr5fsuBlBqoXfJGLe3VbmHjG9Mczi9T//3h7vygXtcDlQtJg44iQiIjIBRbGPO7gghPJy0ZIxT2HOLIUgwxQzsgYrUR350HSIMaJLidhgKY+mw+pflBDrX8E7OGBjPCAPc76gQFSTqAIiYrb/8dRP4CyosJ/rmwU5XIxHMilt4QBJwsSkBMClxOQULBlkRRwEONmR2kJcDGjADX2/+xO8r5iqjExqmLyrWpcPFRta1BfAwCtyN3XpuJ4RgAAAABJRU5ErkJggg==&url=https://apt.izzysoft.de/fdroid/api/v1/shield/com.kunzisoft.keepass.free&label=IzzyOnDroid) | Free & [Libre](https://apt.izzysoft.de/fdroid/index/apk/com.kunzisoft.keepass.libre) |
-| [GitHub](https://github.com/Kunzisoft/KeePassDX/releases) / [Obtainium](https://github.com/ImranR98/Obtainium) | ![GitHub Release](https://img.shields.io/github/v/release/Kunzisoft/KeePassDX?include_prereleases&logo=GitHub&label=GitHub) | Free & Libre |
+The current source adds a FIDO2 launcher badge for the upcoming 0.1.4 test build. The 0.1.3 download has the previous icon.
 
-## Package authenticity from GitHub
-- Download the app from [GitHub releases](https://github.com/Kunzisoft/KeePassDX/releases/latest)
-- Install [`apksigner`](https://developer.android.com/tools/apksigner) from [Android Studio](https://developer.android.com/studio)
-- Open the directory where you saved the downloaded file in the Terminal
-- Make sure that you have `apksigner` installed by running:
-```shell
-apksigner --version
-```
-- Depending on the APK file you downloaded, run:
+| Requirement | Supported scope |
+| --- | --- |
+| Android | Android 13 or later, with USB host support |
+| Security key | Token2 PIN+ Dual over USB-C; USB ID `349e:0024` |
+| Token capability | FIDO2 `hmac-secret`, with an existing token PIN |
+| Database | Password-only KDBX; database credentials remain unchanged |
+| App package | `com.kunzisoft.keepass.fido2` — installs alongside standard KeePassDX |
 
-```shell
-apksigner verify --verbose --print-certs -min-sdk-version 24 KeePassDX-*.apk
-```
+Install an update over the existing FIDO2 test app to keep its local enrollment. Do not uninstall or clear app data first. Store/F-Droid releases of the original project do **not** include this fork's USB unlock integration.
 
-You should get this output :
-```shell
-Verified using v2 scheme (APK Signature Scheme v2): true
-...
-Number of signers: 1
-Signer #1 certificate SHA-256 digest: 7d55b8af210381aabf960f07e17cf7857b6d2a642ca2da6bf0bdf1b200362f04
-...
-Signer #1 public key SHA-256 digest: 5d261d3176db1e077b80112824d9390167f3be0561827e42112ed6b71192db81
-```
-If it's the case, this means that the APK was well built by the author of KeePassDX.
+## What this fork adds
 
-## Frequently Asked Questions
+- **USB token + PIN unlock** after one-time enrollment, without typing the database master password each time.
+- **Automatic input switching:** a connected supported token changes the main field to **Token PIN**; without it, the field is **Master Password**.
+- **Master-password fallback even with a token connected**, through **Master Password verwenden** in the menu.
+- **Separate enrollment prompts** for the database master password and token PIN, so enrollment remains available with the token plugged in.
+- **A simplified unlock screen:** the legacy hardware-key/YubiKey row is hidden in this variant.
+- **Persistent local enrollment** that survives closing the database and restarting the app.
+- **A FIDO2 badge on the launcher icon** in the 0.1.4 source, including themed-icon support.
 
-Other questions? You can read the [FAQ](https://github.com/Kunzisoft/KeePassDX/wiki/FAQ) 
-	
-## Other devices
+The underlying KeePassDX editor, groups, entries, search, Autofill, Magikeyboard and other upstream functionality remain available. This change adds an unlock method; it does not replace the database format.
 
-- [KeePass](https://keepass.info/) (https://keepass.info/) is the original and official project for the desktop, with technical documentation for standardized database files. It is updated regularly with active maintenance (written in C#).
+## First-time enrollment
 
-- [KeePassXC](https://keepassxc.org/) (https://keepassxc.org/) is an alternative integration of KeePass written in C++.
+1. Back up your KDBX and keep its master password in a safe, independent place.
+2. Install the FIDO2 APK and select your password-only database.
+3. Connect the Token2 PIN+ Dual by USB-C.
+4. Open the menu and choose **Enroll USB token**.
+5. Enter the **database master password** in the separate enrollment dialog.
+6. Grant the Android USB permission when requested, enter the **token PIN**, and touch the token when prompted.
+7. After successful enrollment, lock the database and verify token unlock.
 
-- [KeeWeb](https://keeweb.info/) (https://keeweb.info/) is a web version that is also compatible with KeePass files.
+Enrollment is saved only after the supplied master password successfully opens the matching database.
 
-## License
+## Everyday use and recovery
 
-  Copyright © 2026 Jeremy Jamet / [Kunzisoft](https://www.kunzisoft.com).
+**Unlock:** select the same database, connect the enrolled token, enter its PIN in **Token PIN**, then use **Open** or the keyboard's Done action. Touch the token when prompted.
 
-  This file is part of KeePassDX.
+**Use the password:** unplug the token or choose **Master Password verwenden**. **Unlock with USB token** switches back to PIN mode.
 
-  [KeePassDX](https://www.keepassdx.com) is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
+**Keep your master password.** It remains a valid way to unlock the unchanged KDBX, including in desktop clients such as KeePassXC. This is not mandatory token enforcement on the database.
 
-  KeePassDX is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+| Situation | What to do |
+| --- | --- |
+| Token lost or reset | Open with the master password, then enroll a replacement |
+| App reinstalled, app data cleared or new Android device | Open with the master password and enroll on that installation |
+| Database master password changed | Use the new master password and enroll again |
+| Database selected through a different document URI | Enrollment may need to be repeated for that URI |
+| Remove token enrollment | Deletes only this app's local enrollment record; leaves the database and token unchanged |
 
-  You should have received a copy of the GNU General Public License
-  along with KeePassDX.  If not, see <http://www.gnu.org/licenses/>.
-  
-  *This project is a fork of [KeePassDroid](https://github.com/bpellin/keepassdroid) by bpellin.*
+**Unplugging the token does not lock an already open database.** KeePassDX's normal session-lock settings still apply.
+
+## How the unlock works
+
+The PIN authorizes a FIDO2 operation on the token; it is not the KDBX password. The token's `hmac-secret` output is passed through HKDF-SHA256 to derive an AES-256-GCM key. That key encrypts a local copy of the database master password. After token authorization, the app decrypts the password and supplies it to KeePassDX's existing database-opening pipeline.
+
+The enrollment record is stored in the app's private `filesDir/fido2-v1` directory and bound to the database URI and credential metadata. The FIDO2 variant disables app backup and excludes app data from configured backup/transfer mechanisms. The integration does not persist the PIN or a plaintext copy of the master password. An unlocked app necessarily handles the recovered password in memory.
+
+## Scope and validation
+
+- USB only: **NFC is not implemented** in this integration.
+- Other security-key models are not currently supported by the device filter.
+- Key files and simultaneous backup-token enrollment are outside the supported flow.
+- One enrollment per database URI per Android installation; enrolling another token replaces that local enrollment.
+- Failed PIN authentication is not retried automatically.
+- **Experimental test build, not an independently security-audited release.** Java/Android cannot guarantee complete memory zeroization.
+
+The owner reported successful device use of enrollment, persistent unlock and the 0.1.3 login UI. This does not establish compatibility with other devices or complete all negative/recovery tests.
+
+Recorded 0.1.3 checks: 306 protocol checks, six Android/Robolectric tests, release build, lint, signature and alignment verification. Details: [unlock UI](docs/fido2-unlock-ui.md), [storage fix](docs/fido2-storage-fix.md), [protocol background](docs/fido2-hmac-secret.md).
+
+## Development and upstream updates
+
+- `feature/fido2-hmac-secret` is this fork's **default branch** and contains the modified application.
+- `master` is reserved for the upstream KeePassDX baseline.
+- To update: sync **master** with upstream, merge those changes into the FIDO2 branch, resolve conflicts, run tests, build and verify a signed APK, then publish a new release.
+- Syncing `master` alone does not update the modified app.
+- Release tags identify the source used for each published APK. Signing credentials are not stored in this public repository.
+
+Build the variant with `./gradlew :app:assembleFido2Release`. The output is unsigned until signed with the fork's existing signing identity; the upstream signing fingerprint does not authenticate this fork.
+
+## Upstream and license
+
+KeePassDX is developed by Jeremy Jamet / [Kunzisoft](https://www.kunzisoft.com) and contributors. The original project, documentation, official downloads and donation options are at [keepassdx.com](https://www.keepassdx.com) and [Kunzisoft/KeePassDX](https://github.com/Kunzisoft/KeePassDX).
+
+Copyright © 2026 Jeremy Jamet / Kunzisoft and respective contributors. KeePassDX is free software under the **GNU General Public License, version 3 or later**, without warranty. Existing source notices and licenses are retained in this fork; see [LICENSES](LICENSES).
+
+KeePassDX itself is a fork of [KeePassDroid](https://github.com/bpellin/keepassdroid) by bpellin.
