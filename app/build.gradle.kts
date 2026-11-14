@@ -90,6 +90,14 @@ android {
             manifestPlaceholders["googleAndroidBackupAPIKey"] = "AEdPqrEAAAAIbRfbV8fHLItXo8OcHwrO0sSNblqhPwkc0DPTqg"
             manifestPlaceholders["googlePlayServicesPackage"] = gmsPackage
         }
+        create("fido2") {
+            dimension = "version"
+            applicationIdSuffix = ".fido2"
+            buildConfigField("String", "BUILD_VERSION", "\"fido2\"")
+            buildConfigField("boolean", "CLOSED_STORE", "false")
+            buildConfigField("String[]", "STYLES_DISABLED", "{}")
+            buildConfigField("String[]", "ICON_PACKS_DISABLED", "{}")
+        }
     }
 
     sourceSets {
