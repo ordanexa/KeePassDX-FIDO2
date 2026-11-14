@@ -1,4 +1,4 @@
-# KeePassDX FIDO2 — Ordanexa fork
+# KeePassDX-FIDO2 — Ordanexa fork
 
 <img src="art/fido2-icon.svg" width="128" alt="KeePassDX FIDO2 icon">
 
@@ -8,9 +8,9 @@ This is an independent, experimental modification of [Kunzisoft/KeePassDX](https
 
 ## Download
 
-**[Download the 0.1.4 test APK](https://github.com/ordanexa/KeePassDX/releases/download/v0.1.4-test/keepassdx-fido2-0.1.4-test.apk)** · [Release notes and downloads](https://github.com/ordanexa/KeePassDX/releases)
+**[Download the 0.1.4 test APK](https://github.com/ordanexa/KeePassDX-FIDO2/releases/download/v0.1.4-test/keepassdx-fido2-0.1.4-test.apk)** · [Release notes and downloads](https://github.com/ordanexa/KeePassDX-FIDO2/releases)
 
-**Current release: 0.1.4-test**, with the FIDO2 launcher icon. Build, protocol checks, Android unit tests, lint and signing checks passed; physical-device acceptance of this icon update remains open. The previously device-tested [0.1.3 release](https://github.com/ordanexa/KeePassDX/releases/tag/v0.1.3-test) remains available.
+**Current release: 0.1.4-test**, with the FIDO2 launcher icon. Build, protocol checks, Android unit tests, lint and signing checks passed; physical-device acceptance of this icon update remains open. The previously device-tested [0.1.3 release](https://github.com/ordanexa/KeePassDX-FIDO2/releases/tag/v0.1.3-test) remains available.
 
 | Requirement | Supported scope |
 | --- | --- |
@@ -81,7 +81,11 @@ The enrollment record is stored in the app's private `filesDir/fido2-v1` directo
 
 The owner reported successful device use of enrollment, persistent unlock and the 0.1.3 login UI. This does not establish compatibility with other devices or complete all negative/recovery tests.
 
-The 0.1.4 build passed 306 protocol checks, the FIDO2 Android unit tests, release build, lint, signing and alignment checks. The downloaded APK was checked against the build checksum and source marker, its signing certificate matches 0.1.3, and its compiled icon paths match the new assets. See the [0.1.4 release](https://github.com/ordanexa/KeePassDX/releases/tag/v0.1.4-test) for the APK checksum and source commit. Earlier implementation details: [unlock UI](docs/fido2-unlock-ui.md), [storage fix](docs/fido2-storage-fix.md), [protocol background](docs/fido2-hmac-secret.md).
+The 0.1.4 build passed 306 protocol checks, the FIDO2 Android unit tests, release build, lint, signing and alignment checks. The downloaded APK was checked against the build checksum and source marker, its signing certificate matches 0.1.3, and its compiled icon paths match the new assets. See the [0.1.4 release](https://github.com/ordanexa/KeePassDX-FIDO2/releases/tag/v0.1.4-test) for the APK checksum and source commit. Earlier implementation details: [unlock UI](docs/fido2-unlock-ui.md), [storage fix](docs/fido2-storage-fix.md), [protocol background](docs/fido2-hmac-secret.md).
+
+## Project identity
+
+The repository is `ordanexa/KeePassDX-FIDO2`; the Android app is named **KeePassDX FIDO2** from 0.1.5 onward. The application ID and signing identity are unchanged, so an in-place update preserves app data and local enrollment. Version 0.1.5 is being prepared; the download above remains the published 0.1.4 build until validation finishes.
 
 ## Development and upstream updates
 
