@@ -101,6 +101,44 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
     private var fidoUnlock: com.kunzisoft.keepass.fido2.FidoUnlock? = null
 
+    private var enrollmentDialog: AlertDialog? = null
+    private var masterPasswordOverride = false
+    private var lastTokenConnected = false
+    private val tokenMonitorHandler = Handler(Looper.getMainLooper())
+    private val tokenMonitor = object : Runnable {
+        override fun run() {
+            refreshFidoInputMode()
+            tokenMonitorHandler.postDelayed(this, 750)
+        }
+    }
+
+    private fun refreshFidoInputMode(): Boolean {
+        val fido = fidoUnlock ?: return false
+        val connected = fido.hasConnectedToken()
+        if (connected != lastTokenConnected) {
+            masterPasswordOverride = false
+            lastTokenConnected = connected
+            fido.cancel()
+        }
+        val pinMode = connected && !masterPasswordOverride
+        val changed = pinMode != mainCredentialView.isTokenPinMode
+        mainCredentialView.setTokenPinMode(pinMode)
+        deviceUnlockButton?.isVisible = !pinMode
+        if (changed) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (pinMode) mDeviceUnlockViewModel?.disconnect()
+                else mDeviceUnlockViewModel?.connect(mMainCredentialViewModel.databaseFileUri)
+            }
+            invalidateOptionsMenu()
+        }
+        return changed
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (fidoUnlock != null) tokenMonitorHandler.post(tokenMonitor)
+    }
+
     // Views
     private var toolbar: Toolbar? = null
     private var filenameView: TextView? = null
@@ -152,6 +190,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         coordinatorLayout = findViewById(R.id.activity_password_coordinator_layout)
 
         if (com.kunzisoft.keepass.BuildConfig.BUILD_VERSION == "fido2" && Build.VERSION.SDK_INT >= 26) {
+            mainCredentialView.configureFido2Input()
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
             fidoUnlock = com.kunzisoft.keepass.fido2.FidoUnlock(this) { recoveredPassword ->
                 mainCredentialView.populatePasswordTextView(null)
@@ -161,6 +200,8 @@ class MainCredentialActivity : DatabaseModeActivity() {
                 )
             }
         }
+
+        refreshFidoInputMode()
 
         mainCredentialView.keyFileSelectionView.setOpenFileClickListener(this, openFileResultLauncher)
 
@@ -182,6 +223,11 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
         // Encapsulate function to load database
         fun loadDatabase() {
+            if (refreshFidoInputMode()) return
+            if (mainCredentialView.isTokenPinMode) {
+                fidoUnlock?.beginWithPin(mMainCredentialViewModel.databaseFileUri, mainCredentialView.takeTokenPin())
+                return
+            }
             fidoUnlock?.cancel()
             mMainCredentialViewModel.loadDatabase(
                 mainCredential = mainCredentialView.getMainCredential(),
@@ -204,7 +250,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
             loadDatabase()
         } else {
             // Init Biometric elements
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !mainCredentialView.isTokenPinMode) {
                 mDeviceUnlockViewModel?.connect(mMainCredentialViewModel.databaseFileUri)
             }
         }
@@ -339,6 +385,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshFidoInputMode()
 
         // Init Biometric elements only if allowed
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
@@ -454,6 +501,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     override fun onNewIntent(intent: Intent?) {
+        if (mainCredentialView.isTokenPinMode) mainCredentialView.populatePasswordTextView(null)
         fidoUnlock?.cancel()
         super.onNewIntent(intent)
         getUriFromIntent(intent)
@@ -487,6 +535,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     private fun onCredentialEncrypted(cipherEncryptDatabase: CipherEncryptDatabase) {
+        if (mainCredentialView.isTokenPinMode) return
         fidoUnlock?.cancel()
         // Load the database if password is registered with biometric
         mMainCredentialViewModel.loadDatabase(
@@ -497,6 +546,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     private fun onCredentialDecrypted(cipherDecryptDatabase: CipherDecryptDatabase) {
+        if (mainCredentialView.isTokenPinMode) return
         fidoUnlock?.cancel()
         // Load the database if password is retrieve from biometric
         // Retrieve from biometric
@@ -544,6 +594,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
             menu.add(0, FIDO_UNLOCK, 0, "Unlock with USB token")
             menu.add(0, FIDO_ENROLL, 1, "Enroll USB token")
             menu.add(0, FIDO_REMOVE, 2, "Remove token enrollment")
+            menu.add(0, FIDO_MASTER_PASSWORD, 3, "Master Password verwenden")
         }
         if (mMainCredentialViewModel.isReadOnlyToggleAllowed()) {
             changeDatabaseReadModeIcon(menu.findItem(R.id.menu_open_file_read_mode_key))
@@ -674,33 +725,66 @@ class MainCredentialActivity : DatabaseModeActivity() {
         }
     }
 
+    private fun showFidoEnrollmentPassword() {
+        refreshFidoInputMode()
+        fidoUnlock?.cancel()
+        // This input is always the database password, never the current PIN field.
+        mainCredentialView.populatePasswordTextView(null)
+        val input = android.widget.EditText(this).apply {
+            hint = "Master Password"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            isSingleLine = true
+            isSaveEnabled = false
+            isSaveFromParentEnabled = false
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+            imeOptions = android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Enroll USB token")
+            .setMessage("Master Password der Datenbank eingeben. Die Token-PIN wird anschließend separat abgefragt. Das bisherige Enrollment wird erst nach erfolgreichem Öffnen ersetzt.")
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton("Enroll", null)
+            .create()
+        enrollmentDialog = dialog
+        dialog.setOnDismissListener { input.text.clear(); enrollmentDialog = null }
+        dialog.show()
+        dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (input.length() == 0) { input.error = "Master Password eingeben"; return@setOnClickListener }
+            val master = CharArray(input.length())
+            input.text.getChars(0, master.size, master, 0)
+            input.text.clear()
+            dialog.dismiss()
+            refreshFidoInputMode()
+            fidoUnlock?.begin(mMainCredentialViewModel.databaseFileUri, master, true)
+                ?: master.fill('\u0000')
+        }
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
 
         when (item.itemId) {
-            FIDO_UNLOCK, FIDO_ENROLL -> {
-                val credentials = mainCredentialView.getMainCredential()
-                if (credentials.keyFileUri != null || credentials.hardwareKey != null) {
-                    credentials.clear()
-                    Toast.makeText(this, "FIDO2 V1 supports password-only databases.", Toast.LENGTH_LONG).show()
-                    return true
+            FIDO_MASTER_PASSWORD -> {
+                refreshFidoInputMode()
+                fidoUnlock?.cancel()
+                masterPasswordOverride = true
+                refreshFidoInputMode()
+                mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                return true
+            }
+            FIDO_UNLOCK -> {
+                fidoUnlock?.cancel()
+                masterPasswordOverride = false
+                refreshFidoInputMode()
+                if (!mainCredentialView.isTokenPinMode) {
+                    Toast.makeText(this, "Token2 per USB-C anschließen.", Toast.LENGTH_LONG).show()
                 }
-                val enroll = item.itemId == FIDO_ENROLL
-                val secret = if (enroll) credentials.password?.copyOf() else null
-                credentials.clear()
-                if (enroll) {
-                    AlertDialog.Builder(this)
-                        .setTitle("Enroll USB token")
-                        .setMessage("Use a test database. This replaces any local enrollment only after successful database unlock. Keep the master password for recovery.")
-                        .setNegativeButton(android.R.string.cancel) { _, _ -> secret?.fill('\u0000') }
-                        .setOnCancelListener { secret?.fill('\u0000') }
-                        .setPositiveButton("Enroll") { _, _ ->
-                            mainCredentialView.populatePasswordTextView(null)
-                            fidoUnlock?.begin(mMainCredentialViewModel.databaseFileUri, secret?.copyOf(), true)
-                        }.create().also { confirmation ->
-                            confirmation.setOnDismissListener { secret?.fill('\u0000') }
-                            confirmation.show()
-                        }
-                } else fidoUnlock?.begin(mMainCredentialViewModel.databaseFileUri, null, false)
+                mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                return true
+            }
+            FIDO_ENROLL -> {
+                showFidoEnrollmentPassword()
                 return true
             }
             FIDO_REMOVE -> {
@@ -741,6 +825,9 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     override fun onStop() {
+        enrollmentDialog?.dismiss()
+        tokenMonitorHandler.removeCallbacks(tokenMonitor)
+        if (mainCredentialView.isTokenPinMode) mainCredentialView.populatePasswordTextView(null)
         fidoUnlock?.cancel()
         super.onStop()
     }
@@ -757,6 +844,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         private const val FIDO_UNLOCK = 0x7f0f7101
         private const val FIDO_ENROLL = 0x7f0f7102
         private const val FIDO_REMOVE = 0x7f0f7103
+        private const val FIDO_MASTER_PASSWORD = 0x7f0f7104
 
         private val TAG = MainCredentialActivity::class.java.name
 

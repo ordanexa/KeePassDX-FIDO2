@@ -56,6 +56,40 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
     var onConditionToStoreCredentialChanged: ((CredentialStorage, verified: Boolean) -> Unit)? = null
     var onValidateListener: (() -> Unit)? = null
 
+    var isTokenPinMode: Boolean = false
+        private set
+    private var fido2Input = false
+
+    fun configureFido2Input() {
+        fido2Input = true
+        populateHardwareKeyView(null)
+        findViewById<android.view.View>(R.id.container_hardware_key).visibility = GONE
+        passwordTextView.isSaveEnabled = false
+        passwordTextView.isSaveFromParentEnabled = false
+        findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.password_input_layout).hint = "Master Password"
+    }
+
+    fun setTokenPinMode(enabled: Boolean) {
+        if (!fido2Input || enabled == isTokenPinMode) return
+        // Discard the old secret before changing its meaning.
+        populatePasswordTextView(null)
+        isTokenPinMode = enabled
+        passwordTextView.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+        findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.password_input_layout).hint =
+            if (enabled) "Token PIN" else "Master Password"
+        checkboxPasswordView.visibility = if (enabled) GONE else VISIBLE
+        findViewById<android.view.View>(R.id.container_key_file).visibility = if (enabled) GONE else VISIBLE
+        onConditionToStoreCredentialChanged?.invoke(mCredentialStorage, conditionToStoreCredential())
+    }
+
+    fun takeTokenPin(): CharArray {
+        check(isTokenPinMode)
+        val pin = CharArray(passwordTextView.length())
+        passwordTextView.text.getChars(0, pin.size, pin, 0)
+        populatePasswordTextView(null)
+        return pin
+    }
+
     private var mCredentialStorage: CredentialStorage = CredentialStorage.PASSWORD
 
     init {
@@ -86,6 +120,10 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
             override fun onTextChanged(charSequence: CharSequence, i: Int, i1: Int, i2: Int) {}
 
             override fun afterTextChanged(editable: Editable) {
+                if (isTokenPinMode) {
+                    onConditionToStoreCredentialChanged?.invoke(mCredentialStorage, false)
+                    return
+                }
                 if (editable.toString().isNotEmpty() && !checkboxPasswordView.isChecked)
                     checkboxPasswordView.isChecked = true
             }
@@ -140,6 +178,7 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
     }
 
     fun populatePasswordTextView(text: CharArray?) {
+        if (isTokenPinMode && text != null) return
         if (text == null) {
             passwordTextView.setText("")
             if (checkboxPasswordView.isChecked)
@@ -164,7 +203,7 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
     }
 
     fun populateHardwareKeyView(hardwareKey: HardwareKey?) {
-        if (hardwareKey == null) {
+        if (hardwareKey == null || fido2Input) {
             hardwareKeySelectionView.hardwareKey = null
             if (checkboxHardwareView.isChecked)
                 checkboxHardwareView.isChecked = false
@@ -176,12 +215,14 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
     }
 
     fun isFill(): Boolean {
+        if (isTokenPinMode) return passwordTextView.length() > 0
         return checkboxPasswordView.isChecked
                 || (checkboxKeyFileView.isChecked && keyFileSelectionView.uri != null)
-                || (checkboxHardwareView.isChecked && hardwareKeySelectionView.hardwareKey != null)
+                || (!fido2Input && checkboxHardwareView.isChecked && hardwareKeySelectionView.hardwareKey != null)
     }
 
     fun getMainCredential(): MainCredential {
+        if (isTokenPinMode) return MainCredential()
         return MainCredential().apply {
             this.password = if (checkboxPasswordView.isChecked) {
                 val charArray = CharArray(passwordTextView.length())
@@ -190,12 +231,13 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
             } else null
             this.keyFileUri = if (checkboxKeyFileView.isChecked)
                 keyFileSelectionView.uri else null
-            this.hardwareKey = if (checkboxHardwareView.isChecked)
+            this.hardwareKey = if (!fido2Input && checkboxHardwareView.isChecked)
                 hardwareKeySelectionView.hardwareKey else null
         }
     }
 
     fun conditionToStoreCredential(): Boolean {
+        if (isTokenPinMode) return false
         // TODO HARDWARE_KEY
         return when (mCredentialStorage) {
             CredentialStorage.PASSWORD -> checkboxPasswordView.isChecked
@@ -208,6 +250,7 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
      * Return content of the store credential view allowed
      */
     fun retrieveCredentialForStorage(listener: CredentialStorageListener): ByteArray? {
+        if (isTokenPinMode) return null
         return when (mCredentialStorage) {
             CredentialStorage.PASSWORD -> {
                 val password = CharArray(passwordTextView.length())

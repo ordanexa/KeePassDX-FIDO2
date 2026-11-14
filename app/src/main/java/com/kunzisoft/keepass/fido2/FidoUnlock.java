@@ -28,6 +28,7 @@ public final class FidoUnlock {
     private volatile int generation;
     private volatile UsbIo io;
     private char[] password;
+    private byte[] pendingPin;
     private String database;
     private UsbDevice device;
     private boolean enrolling, busy;
@@ -51,15 +52,30 @@ public final class FidoUnlock {
             if(device==null||returned==null||!device.equals(returned))return;
             if(UsbManager.ACTION_USB_DEVICE_DETACHED.equals(intent.getAction())){cancel();message("Token disconnected. Use your master password or reconnect.");}
             else if(permissionAction.equals(intent.getAction())&&busy){
-                if(manager.hasPermission(device))promptPin();else{cancel();message("USB permission denied.");}
+                if(manager.hasPermission(device))permissionReady();else{cancel();message("USB permission denied.");}
             }
         }
     };
     private AtomicFile file(String db)throws Exception{ return EnrollmentStorage.file(activity,db); }
-    public void begin(Uri uri,char[] suppliedPassword,boolean enroll){
-        if(busy){if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("A token operation is already running.");return;}
-        cancel();
-        if(uri==null){if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("Select a database first.");return;}
+    public boolean hasConnectedToken(){
+        for(UsbDevice d:manager.getDeviceList().values())
+            if(d.getVendorId()==0x349e&&d.getProductId()==0x0024)return true;
+        return false;
+    }
+    public void beginWithPin(Uri uri,char[] suppliedPin){
+        byte[] bytes=null;
+        try{
+            bytes=UnlockRecord.encodeChars(suppliedPin);
+            if(bytes.length<4||bytes.length>63)throw new IOException("PIN must contain 4–63 UTF-8 bytes.");
+            begin(uri,null,false,bytes);bytes=null;
+        }catch(Exception e){message(e.getMessage());}
+        finally{Arrays.fill(suppliedPin,'\0');Crypto.wipe(bytes);}
+    }
+    public void begin(Uri uri,char[] suppliedPassword,boolean enroll){begin(uri,suppliedPassword,enroll,null);}
+    private void begin(Uri uri,char[] suppliedPassword,boolean enroll,byte[] inlinePin){
+        if(busy){Crypto.wipe(inlinePin);if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("A token operation is already running.");return;}
+        cancel();pendingPin=inlinePin;
+        if(uri==null){if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');cancel();message("Select a database first.");return;}
         if(enroll&&(suppliedPassword==null||suppliedPassword.length==0)){
             if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("Enter the database master password first.");return;
         }
@@ -70,10 +86,14 @@ public final class FidoUnlock {
             for(UsbDevice d:manager.getDeviceList().values())if(d.getVendorId()==0x349e&&d.getProductId()==0x0024)matches.add(d);
             if(matches.size()!=1)throw new IOException("Connect exactly one Token2 PIN+ Dual over USB-C.");
             device=matches.get(0);busy=true;
-            if(manager.hasPermission(device))promptPin();
+            if(manager.hasPermission(device))permissionReady();
             else manager.requestPermission(device,PendingIntent.getBroadcast(activity,generation,
                     new Intent(permissionAction).setPackage(activity.getPackageName()),PendingIntent.FLAG_CANCEL_CURRENT|PendingIntent.FLAG_MUTABLE));
         }catch(Exception e){cancel();message(e.getMessage());}
+    }
+    private void permissionReady(){
+        if(pendingPin!=null){byte[] pin=pendingPin;pendingPin=null;run(pin);}
+        else promptPin();
     }
     private void promptPin(){
         if(!busy||activity.isFinishing())return;
@@ -176,6 +196,7 @@ public final class FidoUnlock {
                 }).show();
     }
     public void cancel(){
+        Crypto.wipe(pendingPin);pendingPin=null;
         generation++;busy=false;waitingDatabase=false;pending=null;device=null;
         Crypto.wipe(proofKey);Crypto.wipe(passwordProof);proofKey=null;passwordProof=null;
         UsbIo active=io;if(active!=null)active.close();
