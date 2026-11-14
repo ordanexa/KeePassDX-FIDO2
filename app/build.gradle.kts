@@ -103,6 +103,9 @@ android {
     }
 
     sourceSets {
+        getByName("fido2") {
+            res.srcDirs("src/libre/res", "src/fido2/res")
+        }
         getByName("libre") {
             res.srcDirs("src/libre/res")
         }
