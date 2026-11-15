@@ -1,8 +1,10 @@
-# KeePassDX-FIDO2 — Ordanexa fork
+# KeePassDX-FIDO2 — Android KeePass unlock with FIDO2 hmac-secret
 
 <img src="art/fido2-icon.svg" width="128" alt="KeePassDX FIDO2 icon">
 
 **Unlock your KeePass database on Android with a Token2 USB security key and its PIN.**
+
+KeePassDX-FIDO2 is Ordanexa's experimental Android password-manager fork with **FIDO2 `hmac-secret` over USB-C**, support for the **Token2 PIN+ Dual**, optional **Key Files** and up to **five alternative security keys** per database and device. The KDBX stays compatible with standard KeePass clients: this app locally encrypts the master password using a token-derived key; it does not replace the KDBX encryption or enforce a token as a mandatory database factor.
 
 This is an independent, experimental modification of [Kunzisoft/KeePassDX](https://github.com/Kunzisoft/KeePassDX), based on KeePassDX **4.5.8**. It is not an official KeePassDX release.
 
