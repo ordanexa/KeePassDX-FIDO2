@@ -32,3 +32,13 @@ References: Android USB host documentation and AOSP UsbProfileGroupSettingsManag
 - https://developer.android.com/develop/connectivity/usb/host
 - https://developer.android.com/reference/android/app/Activity
 - https://android.googlesource.com/platform/frameworks/base/+/master/services/usb/java/com/android/server/usb/UsbProfileGroupSettingsManager.java
+
+## Verified build (2026-11-15)
+
+- APK source commit: `b0588a701980ca705a1337cc775c5052c36c1c14`.
+- Version: `4.5.8-fido2-0.1.7-test`, version code `45807`.
+- 306 protocol checks passed in CI. All 13 focused Android unit tests passed locally; the same focused test suite, release build and release lint passed in CI.
+- The downloaded artifact's archive digest, APK checksum and source marker were verified. APK signature matches the previous test signing identity; zip alignment, application ID, version and unchanged permissions were checked. App backup remains disabled.
+- APK SHA-256: `5277b9fa790fdf9033cf9ff3cdd227decbae9506589d926efa9d03db9a2d7fde`.
+- The verified APK was supplied for device testing. Public GitHub release publication remains pending; the README retains the last verified public release link.
+- Physical USB default assignment, repeated connections and browser login coexistence remain unverified until the device tests above are completed.
