@@ -8,16 +8,16 @@ This is an independent, experimental modification of [Kunzisoft/KeePassDX](https
 
 ## Download
 
-**[Download the 0.1.5 test APK](https://github.com/ordanexa/KeePassDX-FIDO2/releases/download/v0.1.5-test/keepassdx-fido2-0.1.5-test.apk)** · [Release notes and downloads](https://github.com/ordanexa/KeePassDX-FIDO2/releases)
+**[Download the 0.1.6 test APK](https://github.com/ordanexa/KeePassDX-FIDO2/releases/download/v0.1.6-test/keepassdx-fido2-0.1.6-test.apk)** · [Release notes and downloads](https://github.com/ordanexa/KeePassDX-FIDO2/releases)
 
-**Current release: 0.1.5-test**, with the Android app name **KeePassDX FIDO2** and the FIDO2 launcher icon. Build, protocol checks, Android unit tests, lint and signing checks passed; physical-device acceptance of this naming update remains open. The previously device-tested [0.1.3 release](https://github.com/ordanexa/KeePassDX-FIDO2/releases/tag/v0.1.3-test) remains available.
+**Current release: 0.1.6-test**, with optional per-database Key Files for both Master Password and Token + PIN unlock, configured through the login menu. Build, 306 protocol checks, 10 Android unit tests, release lint and signing checks passed; physical-device acceptance of the Key File changes remains pending. Earlier releases remain available.
 
 | Requirement | Supported scope |
 | --- | --- |
 | Android | Android 13 or later, with USB host support |
 | Security key | Token2 PIN+ Dual over USB-C; USB ID `349e:0024` |
 | Token capability | FIDO2 `hmac-secret`, with an existing token PIN |
-| Database | Password-only KDBX; database credentials remain unchanged |
+| Database | KDBX with Master Password and optional Key File; database credentials remain unchanged |
 | App package | `com.kunzisoft.keepass.fido2` — installs alongside standard KeePassDX |
 
 Install an update over the existing FIDO2 test app to keep its local enrollment. Do not uninstall or clear app data first. Store/F-Droid releases of the original project do **not** include this fork's USB unlock integration.
@@ -28,8 +28,8 @@ Install an update over the existing FIDO2 test app to keep its local enrollment.
 - **Automatic input switching:** a connected supported token changes the main field to **Token PIN**; without it, the field is **Master Password**.
 - **Master-password fallback even with a token connected**, through **Master Password verwenden** in the menu.
 - **Separate enrollment prompts** for the database master password and token PIN, so enrollment remains available with the token plugged in.
-- **A simplified unlock screen:** the legacy hardware-key/YubiKey row is hidden. In the 0.1.6 source, the Key File and password switches are also hidden; optional Key Files are managed through the login menu.
-- **Optional Key File (0.1.6 source):** associate an existing file per database through **Key File zuordnen / ändern**. It is used for both manual and token unlock. See [Key File behavior and testing](docs/fido2-key-file.md).
+- **A simplified unlock screen:** the legacy hardware-key/YubiKey row is hidden. From 0.1.6, the Key File and password switches are also hidden; optional Key Files are managed through the login menu.
+- **Optional Key File (from 0.1.6):** associate an existing file per database through **Key File zuordnen / ändern**. It is used for both manual and token unlock. See [Key File behavior and testing](docs/fido2-key-file.md).
 - **Persistent local enrollment** that survives closing the database and restarting the app.
 - **A FIDO2 badge on the launcher icon** since 0.1.4, including themed-icon support.
 
@@ -75,18 +75,18 @@ The enrollment record is stored in the app's private `filesDir/fido2-v1` directo
 
 - USB only: **NFC is not implemented** in this integration.
 - Other security-key models are not currently supported by the device filter.
-- Optional Key Files are implemented in the 0.1.6 source; physical-device validation is pending. Simultaneous backup-token enrollment remains outside the supported flow.
+- Optional Key Files are included from 0.1.6; physical-device validation is pending. Simultaneous backup-token enrollment remains outside the supported flow.
 - One enrollment per database URI per Android installation; enrolling another token replaces that local enrollment.
 - Failed PIN authentication is not retried automatically.
 - **Experimental test build, not an independently security-audited release.** Java/Android cannot guarantee complete memory zeroization.
 
 The owner reported successful device use of enrollment, persistent unlock and the 0.1.3 login UI. This does not establish compatibility with other devices or complete all negative/recovery tests.
 
-The 0.1.5 build passed 306 protocol checks, the FIDO2 Android unit tests, release build, lint, signing and alignment checks. The downloaded APK was checked against the build checksum and source marker; its display name is KeePassDX FIDO2, and its application ID, signing certificate and permissions match 0.1.4. App backup remains disabled. See the [0.1.5 release](https://github.com/ordanexa/KeePassDX-FIDO2/releases/tag/v0.1.5-test) for the APK checksum and source commit. Earlier implementation details: [unlock UI](docs/fido2-unlock-ui.md), [storage fix](docs/fido2-storage-fix.md), [protocol background](docs/fido2-hmac-secret.md).
+The 0.1.6 build passed 306 protocol checks, 10 Android unit tests, release build, release lint, signing and alignment checks. The downloaded APK checksum and source marker were verified, and the published GitHub asset matches the verified APK. Application ID and signing identity are unchanged; app backup remains disabled. See the [0.1.6 release](https://github.com/ordanexa/KeePassDX-FIDO2/releases/tag/v0.1.6-test) and [Key File validation](docs/fido2-key-file.md) for the checksum, source commit and test scope.
 
 ## Project identity
 
-The repository is `ordanexa/KeePassDX-FIDO2`; the Android app is named **KeePassDX FIDO2** from 0.1.5 onward. The application ID and signing identity are unchanged, so an in-place update preserves app data and local enrollment. Version 0.1.5 changes the app label and version metadata; the token-unlock and enrollment logic is unchanged.
+The repository is `ordanexa/KeePassDX-FIDO2`; the Android app is named **KeePassDX FIDO2** from 0.1.5 onward. The application ID and signing identity are unchanged, so an in-place update preserves app data and local enrollment. Version 0.1.5 introduced the current app label; 0.1.6 adds optional Key File support without changing the enrollment record format.
 
 ## Development and upstream updates
 
