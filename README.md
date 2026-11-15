@@ -12,6 +12,8 @@ This is an independent, experimental modification of [Kunzisoft/KeePassDX](https
 
 **Current release: 0.1.6-test**, with optional per-database Key Files for both Master Password and Token + PIN unlock, configured through the login menu. Build, 306 protocol checks, 10 Android unit tests, release lint and signing checks passed; physical-device acceptance of the Key File changes remains pending. Earlier releases remain available.
 
+**0.1.7 test candidate:** the default branch adds a no-display USB attachment handler intended to avoid repeated permission prompts after Android's initial default-handler association. It does not open the KeePass UI or access the token on attachment. Device/browser acceptance and a public GitHub release are pending. See [USB behavior and test steps](docs/fido2-usb-attach.md).
+
 | Requirement | Supported scope |
 | --- | --- |
 | Android | Android 13 or later, with USB host support |
