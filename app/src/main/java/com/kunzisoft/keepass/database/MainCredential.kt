@@ -90,10 +90,13 @@ data class MainCredential(
 
     private fun getKeyFileData(contentResolver: ContentResolver,
                                keyFileUri: Uri): ByteArray? {
-        contentResolver.getUriInputStream(keyFileUri)?.use { keyFileInputStream ->
-            return keyFileInputStream.readBytes()
+        try {
+            val stream = contentResolver.getUriInputStream(keyFileUri)
+                ?: throw java.io.IOException("No key file stream")
+            return stream.use { it.readBytes() }
+        } catch (error: Exception) {
+            throw java.io.IOException("Key File nicht verfügbar. Datei und Zugriffsberechtigung prüfen oder über das Menü erneut zuordnen.", error)
         }
-        return null
     }
 
     fun clear() {

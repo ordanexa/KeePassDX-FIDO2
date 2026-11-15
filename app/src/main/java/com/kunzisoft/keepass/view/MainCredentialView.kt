@@ -64,6 +64,8 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
         fido2Input = true
         populateHardwareKeyView(null)
         findViewById<android.view.View>(R.id.container_hardware_key).visibility = GONE
+        checkboxPasswordView.visibility = GONE
+        findViewById<android.view.View>(R.id.container_key_file).visibility = GONE
         passwordTextView.isSaveEnabled = false
         passwordTextView.isSaveFromParentEnabled = false
         findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.password_input_layout).hint = "Master Password"
@@ -77,8 +79,8 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
         passwordTextView.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
         findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.password_input_layout).hint =
             if (enabled) "Token PIN" else "Master Password"
-        checkboxPasswordView.visibility = if (enabled) GONE else VISIBLE
-        findViewById<android.view.View>(R.id.container_key_file).visibility = if (enabled) GONE else VISIBLE
+        checkboxPasswordView.visibility = GONE
+        findViewById<android.view.View>(R.id.container_key_file).visibility = GONE
         onConditionToStoreCredentialChanged?.invoke(mCredentialStorage, conditionToStoreCredential())
     }
 
@@ -221,6 +223,9 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
                 || (!fido2Input && checkboxHardwareView.isChecked && hardwareKeySelectionView.hardwareKey != null)
     }
 
+    fun selectedKeyFile(): Uri? =
+        if (fido2Input || checkboxKeyFileView.isChecked) keyFileSelectionView.uri else null
+
     fun getMainCredential(): MainCredential {
         if (isTokenPinMode) return MainCredential()
         return MainCredential().apply {
@@ -229,8 +234,7 @@ class MainCredentialView @JvmOverloads constructor(context: Context,
                 passwordTextView.text.getChars(0, passwordTextView.length(), charArray, 0)
                 charArray
             } else null
-            this.keyFileUri = if (checkboxKeyFileView.isChecked)
-                keyFileSelectionView.uri else null
+            this.keyFileUri = selectedKeyFile()
             this.hardwareKey = if (!fido2Input && checkboxHardwareView.isChecked)
                 hardwareKeySelectionView.hardwareKey else null
         }

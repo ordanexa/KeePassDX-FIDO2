@@ -23,6 +23,22 @@ class FidoInputViewTest {
         val context = ContextThemeWrapper(ApplicationProvider.getApplicationContext<Context>(), R.style.KeepassDXStyle_Light)
         return MainCredentialView(context).apply { configureFido2Input() }
     }
+    @Test fun keyFileStaysSelectedAcrossTokenAndRecoveryModesWithoutVisibleSwitches() {
+        val view = view()
+        val file = android.net.Uri.parse("file:///synthetic.key")
+        view.populateKeyFileView(file)
+        assertEquals(file, view.getMainCredential().keyFileUri)
+        view.setTokenPinMode(true)
+        assertEquals(file, view.selectedKeyFile())
+        assertNull(view.getMainCredential().password)
+        assertEquals(View.GONE, view.findViewById<View>(R.id.container_key_file).visibility)
+        view.setTokenPinMode(false)
+        assertEquals(file, view.getMainCredential().keyFileUri)
+        assertEquals(View.GONE, view.findViewById<View>(R.id.container_key_file).visibility)
+        assertEquals(View.GONE, view.findViewById<View>(R.id.password_checkbox).visibility)
+        view.populateKeyFileView(null)
+        assertNull(view.selectedKeyFile())
+    }
     @Test fun pinCannotBecomeDatabasePasswordOrStoredBiometricCredential() {
         val view = view()
         val edit = view.findViewById<EditText>(R.id.password_text_view)

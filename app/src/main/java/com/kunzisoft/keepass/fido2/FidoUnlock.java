@@ -18,7 +18,7 @@ import java.util.concurrent.*;
 /** Activity-scoped coordinator. No new plaintext persistence; unlock uses the existing KeePassDX pipeline. */
 @TargetApi(26)
 public final class FidoUnlock {
-    public interface Callback { void unlock(char[] password); }
+    public interface Callback { void unlock(char[] password, Uri keyFile); }
     private final Activity activity;
     private final UsbManager manager;
     private final Handler main=new Handler(Looper.getMainLooper());
@@ -30,6 +30,7 @@ public final class FidoUnlock {
     private char[] password;
     private byte[] pendingPin;
     private String database;
+    private Uri keyFile;
     private UsbDevice device;
     private boolean enrolling, busy;
     private AlertDialog dialog;
@@ -62,24 +63,24 @@ public final class FidoUnlock {
             if(d.getVendorId()==0x349e&&d.getProductId()==0x0024)return true;
         return false;
     }
-    public void beginWithPin(Uri uri,char[] suppliedPin){
+    public void beginWithPin(Uri uri,char[] suppliedPin,Uri selectedKeyFile){
         byte[] bytes=null;
         try{
             bytes=UnlockRecord.encodeChars(suppliedPin);
             if(bytes.length<4||bytes.length>63)throw new IOException("PIN must contain 4–63 UTF-8 bytes.");
-            begin(uri,null,false,bytes);bytes=null;
+            begin(uri,null,false,bytes,selectedKeyFile);bytes=null;
         }catch(Exception e){message(e.getMessage());}
         finally{Arrays.fill(suppliedPin,'\0');Crypto.wipe(bytes);}
     }
-    public void begin(Uri uri,char[] suppliedPassword,boolean enroll){begin(uri,suppliedPassword,enroll,null);}
-    private void begin(Uri uri,char[] suppliedPassword,boolean enroll,byte[] inlinePin){
+    public void begin(Uri uri,char[] suppliedPassword,boolean enroll,Uri selectedKeyFile){begin(uri,suppliedPassword,enroll,null,selectedKeyFile);}
+    private void begin(Uri uri,char[] suppliedPassword,boolean enroll,byte[] inlinePin,Uri selectedKeyFile){
         if(busy){Crypto.wipe(inlinePin);if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("A token operation is already running.");return;}
         cancel();pendingPin=inlinePin;
         if(uri==null){if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');cancel();message("Select a database first.");return;}
         if(enroll&&(suppliedPassword==null||suppliedPassword.length==0)){
             if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("Enter the database master password first.");return;
         }
-        database=uri.toString();enrolling=enroll;password=suppliedPassword;
+        database=uri.toString();enrolling=enroll;password=suppliedPassword;keyFile=selectedKeyFile;
         try{
             if(!enroll&&!file(database).getBaseFile().exists())throw new IOException("No token enrolled for this database on this device. Use Enroll USB token first.");
             List<UsbDevice> matches=new ArrayList<>();
@@ -120,6 +121,7 @@ public final class FidoUnlock {
     private void run(byte[] pin){
         final int request=generation;
         final String db=database;
+        final Uri requestKeyFile=keyFile;
         final boolean enroll=enrolling;
         final UsbDevice selected=device;
         final char[] enrollmentPassword=password;password=null;
@@ -160,17 +162,17 @@ public final class FidoUnlock {
                     } catch(Exception error) { Arrays.fill(result,'\0');cancel();message("Cannot verify pending enrollment.");return; }
                     pending=candidate;waitingDatabase=true;
                     // Ownership of result transfers to KeePassDX's existing credential pipeline.
-                    callback.unlock(result);
+                    callback.unlock(result,requestKeyFile);
                 });
             }catch(Exception e){main.post(()->{if(request==generation){cancel();message(e.getMessage());}});}
             finally{Crypto.wipe(pin);Crypto.wipe(secret);if(unlocked!=null)Arrays.fill(unlocked,'\0');if(enrollmentPassword!=null)Arrays.fill(enrollmentPassword,'\0');}
         });
     }
-    public void databaseResult(Uri completedDatabase,char[] completedPassword,boolean success){
+    public void databaseResult(Uri completedDatabase,char[] completedPassword,Uri completedKeyFile,boolean success){
         if(!waitingDatabase)return;
         byte[] encoded=null,proof=null;
         try {
-            if(completedDatabase==null||!database.equals(completedDatabase.toString())||completedPassword==null) { cancel();return; }
+            if(!Objects.equals(keyFile,completedKeyFile)||completedDatabase==null||!database.equals(completedDatabase.toString())||completedPassword==null) { cancel();return; }
             encoded=UnlockRecord.encodeChars(completedPassword);proof=Crypto.hmac(proofKey,encoded);
             if(!MessageDigest.isEqual(passwordProof,proof)){cancel();return;}
         }catch(Exception error){cancel();return;}
@@ -197,6 +199,7 @@ public final class FidoUnlock {
     }
     public void cancel(){
         Crypto.wipe(pendingPin);pendingPin=null;
+        keyFile=null;
         generation++;busy=false;waitingDatabase=false;pending=null;device=null;
         Crypto.wipe(proofKey);Crypto.wipe(passwordProof);proofKey=null;passwordProof=null;
         UsbIo active=io;if(active!=null)active.close();

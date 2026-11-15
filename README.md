@@ -28,7 +28,8 @@ Install an update over the existing FIDO2 test app to keep its local enrollment.
 - **Automatic input switching:** a connected supported token changes the main field to **Token PIN**; without it, the field is **Master Password**.
 - **Master-password fallback even with a token connected**, through **Master Password verwenden** in the menu.
 - **Separate enrollment prompts** for the database master password and token PIN, so enrollment remains available with the token plugged in.
-- **A simplified unlock screen:** the legacy hardware-key/YubiKey row is hidden in this variant.
+- **A simplified unlock screen:** the legacy hardware-key/YubiKey row is hidden. In the 0.1.6 source, the Key File and password switches are also hidden; optional Key Files are managed through the login menu.
+- **Optional Key File (0.1.6 source):** associate an existing file per database through **Key File zuordnen / ändern**. It is used for both manual and token unlock. See [Key File behavior and testing](docs/fido2-key-file.md).
 - **Persistent local enrollment** that survives closing the database and restarting the app.
 - **A FIDO2 badge on the launcher icon** since 0.1.4, including themed-icon support.
 
@@ -37,7 +38,7 @@ The underlying KeePassDX editor, groups, entries, search, Autofill, Magikeyboard
 ## First-time enrollment
 
 1. Back up your KDBX and keep its master password in a safe, independent place.
-2. Install the FIDO2 APK and select your password-only database.
+2. Install the FIDO2 APK and select your database. With 0.1.6, if the database requires a Key File, associate that file through **Key File zuordnen** before enrollment. Earlier releases support the password-only flow.
 3. Connect the Token2 PIN+ Dual by USB-C.
 4. Open the menu and choose **Enroll USB token**.
 5. Enter the **database master password** in the separate enrollment dialog.
@@ -52,7 +53,7 @@ Enrollment is saved only after the supplied master password successfully opens t
 
 **Use the password:** unplug the token or choose **Master Password verwenden**. **Unlock with USB token** switches back to PIN mode.
 
-**Keep your master password.** It remains a valid way to unlock the unchanged KDBX, including in desktop clients such as KeePassXC. This is not mandatory token enforcement on the database.
+**Keep your master password and any required Key File.** Together they remain a valid way to unlock the unchanged KDBX, including in desktop clients such as KeePassXC. If the KDBX requires a Key File, the password alone is insufficient. This is not mandatory token enforcement on the database.
 
 | Situation | What to do |
 | --- | --- |
@@ -74,7 +75,7 @@ The enrollment record is stored in the app's private `filesDir/fido2-v1` directo
 
 - USB only: **NFC is not implemented** in this integration.
 - Other security-key models are not currently supported by the device filter.
-- Key files and simultaneous backup-token enrollment are outside the supported flow.
+- Optional Key Files are implemented in the 0.1.6 source; physical-device validation is pending. Simultaneous backup-token enrollment remains outside the supported flow.
 - One enrollment per database URI per Android installation; enrolling another token replaces that local enrollment.
 - Failed PIN authentication is not retried automatically.
 - **Experimental test build, not an independently security-audited release.** Java/Android cannot guarantee complete memory zeroization.

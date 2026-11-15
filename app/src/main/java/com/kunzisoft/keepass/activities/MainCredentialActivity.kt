@@ -101,6 +101,9 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
     private var fidoUnlock: com.kunzisoft.keepass.fido2.FidoUnlock? = null
 
+    private val keyFileAssociations by lazy { com.kunzisoft.keepass.fido2.KeyFileAssociation(this) }
+    private var keyFilePickerDatabase: Uri? = null
+
     private var enrollmentDialog: AlertDialog? = null
     private var masterPasswordOverride = false
     private var lastTokenConnected = false
@@ -134,6 +137,11 @@ class MainCredentialActivity : DatabaseModeActivity() {
         return changed
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        keyFilePickerDatabase?.let { outState.putString("fidoKeyFilePickerDatabase", it.toString()) }
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onStart() {
         super.onStart()
         if (fidoUnlock != null) tokenMonitorHandler.post(tokenMonitor)
@@ -162,7 +170,16 @@ class MainCredentialActivity : DatabaseModeActivity() {
     // Manage keyfile selection
     private var openFileResultLauncher: ExternalFileHelper.OpenFileResultLauncher = registerOpenFile { uri ->
         uri?.let {
-            mainCredentialView.populateKeyFileView(uri)
+            if (fidoUnlock != null) {
+                val database = keyFilePickerDatabase
+                keyFilePickerDatabase = null
+                if (database != null && database == mMainCredentialViewModel.databaseFileUri) {
+                    fidoUnlock?.cancel()
+                    keyFileAssociations.assign(database, uri)
+                    mainCredentialView.populateKeyFileView(uri)
+                    invalidateOptionsMenu()
+                }
+            } else mainCredentialView.populateKeyFileView(uri)
         }
     }
 
@@ -172,6 +189,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        keyFilePickerDatabase = savedInstanceState?.getString("fidoKeyFilePickerDatabase")?.let(Uri::parse)
 
         setContentView(R.layout.activity_main_credential)
 
@@ -192,10 +210,10 @@ class MainCredentialActivity : DatabaseModeActivity() {
         if (com.kunzisoft.keepass.BuildConfig.BUILD_VERSION == "fido2" && Build.VERSION.SDK_INT >= 26) {
             mainCredentialView.configureFido2Input()
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-            fidoUnlock = com.kunzisoft.keepass.fido2.FidoUnlock(this) { recoveredPassword ->
+            fidoUnlock = com.kunzisoft.keepass.fido2.FidoUnlock(this) { recoveredPassword, selectedKeyFile ->
                 mainCredentialView.populatePasswordTextView(null)
                 mMainCredentialViewModel.loadDatabase(
-                    mainCredential = MainCredential(password = recoveredPassword),
+                    mainCredential = MainCredential(password = recoveredPassword, keyFileUri = selectedKeyFile),
                     specialMode = mSpecialMode
                 )
             }
@@ -225,7 +243,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         fun loadDatabase() {
             if (refreshFidoInputMode()) return
             if (mainCredentialView.isTokenPinMode) {
-                fidoUnlock?.beginWithPin(mMainCredentialViewModel.databaseFileUri, mainCredentialView.takeTokenPin())
+                fidoUnlock?.beginWithPin(mMainCredentialViewModel.databaseFileUri, mainCredentialView.takeTokenPin(), mainCredentialView.selectedKeyFile())
                 return
             }
             fidoUnlock?.cancel()
@@ -269,9 +287,12 @@ class MainCredentialActivity : DatabaseModeActivity() {
                     mMainCredentialViewModel.databaseFileUIState.collect { state ->
                         infoContainerView?.isVisible = state.showFileRevokedErrorMessage
                         filenameView?.text = state.fileName
-                        state.keyFileUri?.let {
-                            mainCredentialView.populateKeyFileView(it)
-                        }
+                        if (fidoUnlock != null) {
+                            mainCredentialView.populateKeyFileView(keyFileAssociations.resolve(
+                                mMainCredentialViewModel.databaseFileUri,
+                                mainCredentialView.selectedKeyFile() ?: state.keyFileUri
+                            ))
+                        } else state.keyFileUri?.let { mainCredentialView.populateKeyFileView(it) }
                         state.hardwareKey?.let {
                             mainCredentialView.populateHardwareKeyView(it)
                         }
@@ -437,6 +458,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
                 fidoUnlock?.databaseResult(
                     result.data?.getParcelableCompat<Uri>(DATABASE_URI_KEY),
                     result.data?.getParcelableCompat<MainCredential>(MAIN_CREDENTIAL_KEY)?.password,
+                    result.data?.getParcelableCompat<MainCredential>(MAIN_CREDENTIAL_KEY)?.keyFileUri,
                     result.isSuccess
                 )
                 if (result.isSuccess) {
@@ -496,7 +518,9 @@ class MainCredentialActivity : DatabaseModeActivity() {
         hardwareKey: HardwareKey?
     ) {
         mMainCredentialViewModel.assignDatabaseUri(databaseUri)
-        mainCredentialView.populateKeyFileView(keyFileUri)
+        mainCredentialView.populateKeyFileView(
+            if (fidoUnlock != null) keyFileAssociations.resolve(databaseUri, keyFileUri) else keyFileUri
+        )
         mainCredentialView.populateHardwareKeyView(hardwareKey)
     }
 
@@ -578,7 +602,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         clearHardwareKey: Boolean
     ) {
         mainCredentialView.populatePasswordTextView(null)
-        if (clearKeyFile) {
+        if (clearKeyFile && fidoUnlock == null) {
             mainCredentialView.populateKeyFileView(null)
         }
         if (clearHardwareKey) {
@@ -595,6 +619,10 @@ class MainCredentialActivity : DatabaseModeActivity() {
             menu.add(0, FIDO_ENROLL, 1, "Enroll USB token")
             menu.add(0, FIDO_REMOVE, 2, "Remove token enrollment")
             menu.add(0, FIDO_MASTER_PASSWORD, 3, "Master Password verwenden")
+            menu.add(0, FIDO_KEY_FILE, 4, if (mainCredentialView.selectedKeyFile() == null)
+                "Key File zuordnen" else "Key File ändern")
+            if (mainCredentialView.selectedKeyFile() != null)
+                menu.add(0, FIDO_KEY_FILE_REMOVE, 5, "Key File-Zuordnung entfernen")
         }
         if (mMainCredentialViewModel.isReadOnlyToggleAllowed()) {
             changeDatabaseReadModeIcon(menu.findItem(R.id.menu_open_file_read_mode_key))
@@ -757,7 +785,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
             input.text.clear()
             dialog.dismiss()
             refreshFidoInputMode()
-            fidoUnlock?.begin(mMainCredentialViewModel.databaseFileUri, master, true)
+            fidoUnlock?.begin(mMainCredentialViewModel.databaseFileUri, master, true, mainCredentialView.selectedKeyFile())
                 ?: master.fill('\u0000')
         }
     }
@@ -765,6 +793,25 @@ class MainCredentialActivity : DatabaseModeActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
 
         when (item.itemId) {
+            FIDO_KEY_FILE -> {
+                fidoUnlock?.cancel()
+                keyFilePickerDatabase = mMainCredentialViewModel.databaseFileUri
+                if (keyFilePickerDatabase != null) openFileResultLauncher.openDocument.launch(arrayOf("*/*"))
+                return true
+            }
+            FIDO_KEY_FILE_REMOVE -> {
+                val database = mMainCredentialViewModel.databaseFileUri ?: return true
+                AlertDialog.Builder(this).setTitle("Key File-Zuordnung entfernen?")
+                    .setMessage("Dies entfernt nur den gespeicherten Dateiverweis. Eine mit Key File geschützte Datenbank benötigt weiterhin dieselbe Datei. Die Datei wird nicht gelöscht.")
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("Entfernen") { _, _ ->
+                        fidoUnlock?.cancel()
+                        keyFileAssociations.assign(database, null)
+                        mainCredentialView.populateKeyFileView(null)
+                        invalidateOptionsMenu()
+                    }.show()
+                return true
+            }
             FIDO_MASTER_PASSWORD -> {
                 refreshFidoInputMode()
                 fidoUnlock?.cancel()
@@ -845,6 +892,8 @@ class MainCredentialActivity : DatabaseModeActivity() {
         private const val FIDO_ENROLL = 0x7f0f7102
         private const val FIDO_REMOVE = 0x7f0f7103
         private const val FIDO_MASTER_PASSWORD = 0x7f0f7104
+        private const val FIDO_KEY_FILE = 0x7f0f7105
+        private const val FIDO_KEY_FILE_REMOVE = 0x7f0f7106
 
         private val TAG = MainCredentialActivity::class.java.name
 
