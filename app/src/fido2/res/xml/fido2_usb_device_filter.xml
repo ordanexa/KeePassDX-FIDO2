@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same supported device model as the explicit FidoUnlock path. -->
+    <usb-device vendor-id="13470" product-id="36" />
+</resources>

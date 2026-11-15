@@ -1,4 +1,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
-    <application android:allowBackup="false" android:icon="@mipmap/ic_fido2" android:roundIcon="@mipmap/ic_fido2" tools:replace="android:allowBackup,android:icon,android:roundIcon" />
+    <application android:allowBackup="false" android:icon="@mipmap/ic_fido2" android:roundIcon="@mipmap/ic_fido2" tools:replace="android:allowBackup,android:icon,android:roundIcon">
+        <activity
+            android:name="com.kunzisoft.keepass.fido2.UsbAttachActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:taskAffinity="${applicationId}.usb.attach"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/fido2_usb_device_filter" />
+        </activity>
+    </application>
 </manifest>
