@@ -57,6 +57,27 @@ public final class FidoTest {
             }
             System.out.println("PASS "+mode);
         }
+        // Real wire-format allowList selection, signature validation and duplicate exclusion.
+        for(String mode:new String[]{"v1","v2"}){
+            try(Hid hid=new Hid(new Sim(mode))){
+                FidoToken token=new FidoToken(hid,s->{});byte[] pin=Crypto.utf8("123456");
+                FidoToken.Credential actual=token.create(pin);byte[] salt=Crypto.random(32);
+                byte[] reference=token.get(pin,actual,salt);
+                for(int position=0;position<5;position++){
+                    List<FidoToken.Credential> candidates=new ArrayList<>();
+                    for(int i=0;i<5;i++)candidates.add(i==position?actual:new FidoToken.Credential(Crypto.random(32),actual.publicKey));
+                    FidoToken.Assertion result=token.get(pin,candidates,salt);
+                    check(Arrays.equals(result.credential.id,actual.id),"select matching token at position "+position);
+                    check(Arrays.equals(result.secret,reference),"independent list selection preserves secret");
+                    Crypto.wipe(result.secret);
+                }
+                try{token.create(pin,Collections.singletonList(actual));throw new AssertionError("duplicate token allowed");}
+                catch(IOException expected){check(expected.getMessage().contains("0x19"),"duplicate rejected by excludeList");}
+                try{token.get(pin,Collections.singletonList(new FidoToken.Credential(Crypto.random(32),actual.publicKey)),salt);throw new AssertionError("unknown token allowed");}
+                catch(IOException expected){check(expected.getMessage().contains("0x2e"),"unknown token rejected without retry");}
+                Crypto.wipe(reference);Crypto.wipe(pin);
+            }
+        }
         // Regression: the simulator must reject reuse after MakeCredential.
         try(Hid hid=new Hid(new Sim("v2"))){
             FidoToken token=new FidoToken(hid,s->{});

@@ -34,6 +34,8 @@ final class FidoToken {
         if (status != 0) {
             String reason;
             switch (status) {
+                case 0x19: reason = "This token is already enrolled for this database. Existing enrollment was kept."; break;
+                case 0x15: reason = "Token credential-list capacity exceeded. Existing enrollments were kept."; break;
                 case 0x31: reason = "Incorrect PIN. No automatic retry."; break;
                 case 0x33: reason = "PIN authorization rejected. Enrollment/unlock stopped; no automatic retry."; break;
                 case 0x32: reason = "PIN blocked. Do not reset the token."; break;
@@ -49,6 +51,7 @@ final class FidoToken {
 
     final class Session implements AutoCloseable {
         final int version;
+        final long maxCredentials;
         byte[] token;
         Session(byte[] pin, boolean enroll) throws Exception {
             int selected = 0;
@@ -56,6 +59,7 @@ final class FidoToken {
                 hid.init();
                 Object info = command(4,Cbor.map()), options = Cbor.get(info,4);
                 Object exts = Cbor.get(info,2), protocols = Cbor.get(info,6);
+                Object limit=Cbor.get(info,7);maxCredentials=limit==null?Long.MAX_VALUE:Cbor.number(limit);
                 if (!(exts instanceof List) || !((List<?>)exts).contains("hmac-secret"))
                     throw new IOException("Token does not support hmac-secret");
                 if (!Boolean.TRUE.equals(Cbor.get(options,"clientPin"))) throw new IOException("Token PIN is not configured");
@@ -91,22 +95,33 @@ final class FidoToken {
     // Each UV operation consumes its authorization. Reauthenticate for the next
     // operation instead of reusing a token whose UV flag/permissions were cleared.
     // PIN bytes remain only with the caller for this bounded flow and are wiped there.
-    Credential create(byte[] pin) throws Exception {
-        try (Session session = new Session(pin.clone(), true)) { return create(session); }
+    Credential create(byte[] pin) throws Exception { return create(pin,Collections.emptyList()); }
+    Credential create(byte[] pin,List<Credential> excluded) throws Exception {
+        try (Session session = new Session(pin.clone(), true)) { return create(session,excluded); }
     }
     byte[] get(byte[] pin, Credential credential, byte[] salt) throws Exception {
         try (Session session = new Session(pin.clone(), false)) { return get(session, credential, salt); }
     }
 
-    Credential create(Session session) throws Exception {
+    Credential create(Session session) throws Exception { return create(session,Collections.emptyList()); }
+    static List<Object> descriptors(Session session,List<Credential> credentials)throws IOException {
+        if(credentials.size()>5||credentials.size()>session.maxCredentials)throw new IOException("Token does not support this credential-list size.");
+        List<Object> list=new ArrayList<>();
+        for(Credential credential:credentials)list.add(Cbor.map("type","public-key","id",credential.id));
+        return list;
+    }
+    Credential create(Session session,List<Credential> excluded) throws Exception {
+        if(excluded.size()+1>session.maxCredentials)throw new IOException("Token cannot unlock a list with this additional enrollment.");
         byte[] hash = Crypto.random(32);
         progress.update("Create credential: touch the token when it blinks.");
-        Object response = command(1,Cbor.map(
+        Map<Object,Object> args=Cbor.map(
                 1,hash, 2,Cbor.map("id",RP,"name","KeePassDX FIDO2 test"),
                 3,Cbor.map("id",Crypto.random(32),"name","Local database unlock","displayName","Local database unlock"),
                 4,Collections.singletonList(Cbor.map("type","public-key","alg",-7)),
                 6,Cbor.map("hmac-secret",true), 7,Cbor.map("rk",false),
-                8,session.auth(hash),9,session.version));
+                8,session.auth(hash),9,session.version);
+        if(!excluded.isEmpty())args.put(5L,descriptors(session,excluded));
+        Object response=command(1,args);
         byte[] ad = Cbor.bytes(Cbor.get(response,2));
         checkAuthData(ad,0xC5);
         if (ad.length < 56) throw new IOException("Truncated attested credential");
@@ -135,19 +150,38 @@ final class FidoToken {
             throw new IOException("Invalid RP, user presence, verification or extension flags");
     }
 
+    static final class Assertion {
+        final Credential credential;
+        final byte[] secret;
+        Assertion(Credential credential,byte[] secret){this.credential=credential;this.secret=secret;}
+    }
+    Assertion get(byte[] pin,List<Credential> credentials,byte[] salt)throws Exception {
+        try(Session session=new Session(pin.clone(),false)){return get(session,credentials,salt);}
+    }
     byte[] get(Session session, Credential credential, byte[] salt) throws Exception {
+        return get(session,Collections.singletonList(credential),salt).secret;
+    }
+    Assertion get(Session session,List<Credential> credentials,byte[] salt) throws Exception {
+        if(credentials.isEmpty())throw new IOException("No token enrolled for this database.");
+        List<Object> allowed=descriptors(session,credentials);
         if (salt.length != 32) throw new IOException("Invalid salt");
         Object peer = Cbor.get(command(6,Cbor.map(1,session.version,2,2)),1);
         try (Crypto.Agreement a = new Crypto.Agreement(session.version,peer)) {
             byte[] encrypted = a.encrypt(salt), hash = Crypto.random(32);
             progress.update("Unlock: touch the token when it blinks.");
             Object response = command(2,Cbor.map(1,RP,2,hash,
-                    3,Collections.singletonList(Cbor.map("type","public-key","id",credential.id)),
+                    3,allowed,
                     4,Cbor.map("hmac-secret",Cbor.map(1,a.publicKey,2,encrypted,3,a.authenticate(encrypted),4,session.version)),
                     5,Cbor.map("up",true),6,session.auth(hash),7,session.version));
             Object desc = Cbor.get(response,1);
-            if (!"public-key".equals(Cbor.get(desc,"type")) || !MessageDigest.isEqual(credential.id,Cbor.bytes(Cbor.get(desc,"id"))))
-                throw new IOException("Unexpected credential");
+            Credential credential=null;
+            // CTAP may omit the descriptor only for a singleton allowList.
+            if(desc==null&&credentials.size()==1)credential=credentials.get(0);
+            else if(desc!=null&&"public-key".equals(Cbor.get(desc,"type"))){
+                byte[] id=Cbor.bytes(Cbor.get(desc,"id"));
+                for(Credential candidate:credentials)if(MessageDigest.isEqual(candidate.id,id)){credential=candidate;break;}
+            }
+            if(credential==null)throw new IOException("Unexpected credential");
             byte[] ad = Cbor.bytes(Cbor.get(response,2));
             checkAuthData(ad,0x85);
             if ((ad[32]&0x40) != 0) throw new IOException("Unexpected attestation in assertion");
@@ -157,7 +191,7 @@ final class FidoToken {
             if (!verifier.verify(Cbor.bytes(Cbor.get(response,3)))) throw new IOException("Invalid assertion signature");
             byte[] secret = a.decrypt(Cbor.bytes(Cbor.get(Cbor.decodeAt(ad,37),"hmac-secret")));
             if (secret.length != 32) { Crypto.wipe(secret); throw new IOException("Invalid hmac-secret output"); }
-            return secret;
+            return new Assertion(credential,secret);
         }
     }
 }

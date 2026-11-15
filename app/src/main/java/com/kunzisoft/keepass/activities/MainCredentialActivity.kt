@@ -616,8 +616,8 @@ class MainCredentialActivity : DatabaseModeActivity() {
         inflater.inflate(R.menu.open_file, menu)
         if (fidoUnlock != null) {
             menu.add(0, FIDO_UNLOCK, 0, "Unlock with USB token")
-            menu.add(0, FIDO_ENROLL, 1, "Enroll USB token")
-            menu.add(0, FIDO_REMOVE, 2, "Remove token enrollment")
+            menu.add(0, FIDO_ENROLL, 1, "Token hinzufügen")
+            menu.add(0, FIDO_REMOVE, 2, "Tokens verwalten")
             menu.add(0, FIDO_MASTER_PASSWORD, 3, "Master Password verwenden")
             menu.add(0, FIDO_KEY_FILE, 4, if (mainCredentialView.selectedKeyFile() == null)
                 "Key File zuordnen" else "Key File ändern")
@@ -767,25 +767,39 @@ class MainCredentialActivity : DatabaseModeActivity() {
             importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
             imeOptions = android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
         }
+        val tokenName = android.widget.EditText(this).apply {
+            hint = "Token-Name (z. B. Backup zuhause)"
+            isSingleLine = true
+            filters = arrayOf(android.text.InputFilter.LengthFilter(40))
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+        }
+        val fields = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(24, 0, 24, 0)
+            addView(tokenName)
+            addView(input)
+        }
         val dialog = AlertDialog.Builder(this)
-            .setTitle("Enroll USB token")
-            .setMessage("Master Password der Datenbank eingeben. Die Token-PIN wird anschließend separat abgefragt. Das bisherige Enrollment wird erst nach erfolgreichem Öffnen ersetzt.")
-            .setView(input)
+            .setTitle("Token hinzufügen")
+            .setMessage("Bis zu 5 Tokens pro Datenbank auf diesem Gerät. Bestehende Tokens bleiben erhalten. Master Password eingeben; ein zugeordnetes Key File wird mitgeprüft. Danach folgt die Token-PIN. Auf weiteren Geräten ist ein eigenes Enrollment nötig.")
+            .setView(fields)
             .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton("Enroll", null)
+            .setPositiveButton("Hinzufügen", null)
             .create()
         enrollmentDialog = dialog
         dialog.setOnDismissListener { input.text.clear(); enrollmentDialog = null }
         dialog.show()
         dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val name = tokenName.text.toString().trim()
+            if (name.isEmpty()) { tokenName.error = "Token-Name eingeben"; return@setOnClickListener }
             if (input.length() == 0) { input.error = "Master Password eingeben"; return@setOnClickListener }
             val master = CharArray(input.length())
             input.text.getChars(0, master.size, master, 0)
             input.text.clear()
             dialog.dismiss()
             refreshFidoInputMode()
-            fidoUnlock?.begin(mMainCredentialViewModel.databaseFileUri, master, true, mainCredentialView.selectedKeyFile())
+            fidoUnlock?.beginEnrollment(mMainCredentialViewModel.databaseFileUri, master, name, mainCredentialView.selectedKeyFile())
                 ?: master.fill('\u0000')
         }
     }

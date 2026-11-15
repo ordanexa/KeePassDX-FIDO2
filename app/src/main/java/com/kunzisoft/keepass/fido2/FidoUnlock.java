@@ -6,7 +6,6 @@ import android.hardware.usb.*;
 import android.net.Uri;
 import android.os.*;
 import android.text.InputType;
-import android.util.AtomicFile;
 import android.view.*;
 import android.widget.*;
 import android.annotation.TargetApi;
@@ -35,6 +34,8 @@ public final class FidoUnlock {
     private boolean enrolling, busy;
     private AlertDialog dialog;
     private UnlockRecord pending;
+    private EnrollmentSet snapshot;
+    private String tokenName;
     private boolean waitingDatabase;
     private byte[] proofKey, passwordProof;
 
@@ -57,7 +58,6 @@ public final class FidoUnlock {
             }
         }
     };
-    private AtomicFile file(String db)throws Exception{ return EnrollmentStorage.file(activity,db); }
     public boolean hasConnectedToken(){
         for(UsbDevice d:manager.getDeviceList().values())
             if(d.getVendorId()==0x349e&&d.getProductId()==0x0024)return true;
@@ -68,12 +68,14 @@ public final class FidoUnlock {
         try{
             bytes=UnlockRecord.encodeChars(suppliedPin);
             if(bytes.length<4||bytes.length>63)throw new IOException("PIN must contain 4–63 UTF-8 bytes.");
-            begin(uri,null,false,bytes,selectedKeyFile);bytes=null;
+            begin(uri,null,false,bytes,selectedKeyFile,null);bytes=null;
         }catch(Exception e){message(e.getMessage());}
         finally{Arrays.fill(suppliedPin,'\0');Crypto.wipe(bytes);}
     }
-    public void begin(Uri uri,char[] suppliedPassword,boolean enroll,Uri selectedKeyFile){begin(uri,suppliedPassword,enroll,null,selectedKeyFile);}
-    private void begin(Uri uri,char[] suppliedPassword,boolean enroll,byte[] inlinePin,Uri selectedKeyFile){
+    public void beginEnrollment(Uri uri,char[] suppliedPassword,String name,Uri selectedKeyFile){
+        begin(uri,suppliedPassword,true,null,selectedKeyFile,name);
+    }
+    private void begin(Uri uri,char[] suppliedPassword,boolean enroll,byte[] inlinePin,Uri selectedKeyFile,String name){
         if(busy){Crypto.wipe(inlinePin);if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("A token operation is already running.");return;}
         cancel();pendingPin=inlinePin;
         if(uri==null){if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');cancel();message("Select a database first.");return;}
@@ -82,7 +84,9 @@ public final class FidoUnlock {
         }
         database=uri.toString();enrolling=enroll;password=suppliedPassword;keyFile=selectedKeyFile;
         try{
-            if(!enroll&&!file(database).getBaseFile().exists())throw new IOException("No token enrolled for this database on this device. Use Enroll USB token first.");
+            snapshot=EnrollmentStorage.read(activity,database);
+            if(enroll){snapshot.checkAddition(name);tokenName=EnrollmentSet.validateName(name);}
+            else if(snapshot.entries.isEmpty())throw new IOException("No token enrolled for this database on this device. Use Token hinzufügen first.");
             List<UsbDevice> matches=new ArrayList<>();
             for(UsbDevice d:manager.getDeviceList().values())if(d.getVendorId()==0x349e&&d.getProductId()==0x0024)matches.add(d);
             if(matches.size()!=1)throw new IOException("Connect exactly one Token2 PIN+ Dual over USB-C.");
@@ -103,7 +107,7 @@ public final class FidoUnlock {
         pin.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         pin.setSaveEnabled(false);pin.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         pin.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
-        dialog=new AlertDialog.Builder(activity).setTitle(enrolling?"Enroll USB token":"Unlock with USB token")
+        dialog=new AlertDialog.Builder(activity).setTitle(enrolling?"Token hinzufügen":"Unlock with USB token")
                 .setMessage("Enter the token PIN. Touch the token when it blinks. No automatic PIN retries.")
                 .setView(pin).setNegativeButton("Cancel",(d,w)->cancel()).setPositiveButton("Continue",null).create();
         dialog.setOnCancelListener(d->cancel());dialog.setOnDismissListener(d->pin.getText().clear());
@@ -123,6 +127,7 @@ public final class FidoUnlock {
         final String db=database;
         final Uri requestKeyFile=keyFile;
         final boolean enroll=enrolling;
+        final EnrollmentSet enrolled=snapshot;
         final UsbDevice selected=device;
         final char[] enrollmentPassword=password;password=null;
         dialog=new AlertDialog.Builder(activity).setTitle("USB token")
@@ -136,17 +141,18 @@ public final class FidoUnlock {
                 try(Hid hid=new Hid(transport)){
                     FidoToken token=new FidoToken(hid,text->main.post(()->{if(request==generation&&dialog!=null)dialog.setMessage(text);}));
                         if(enroll){
-                            FidoToken.Credential credential=token.create(pin);
-                            byte[] salt=Crypto.random(32);
+                            FidoToken.Credential credential=token.create(pin,enrolled.credentials());
+                            // Public common salt enables one assertion with an allowList. Each
+                            // credential still yields its own independent hmac-secret/key.
+                            byte[] salt=enrolled.entries.isEmpty()?Crypto.random(32):enrolled.entries.get(0).record.salt.clone();
                             secret=token.get(pin,credential,salt);
                             record=UnlockRecord.seal(db,credential,salt,secret,enrollmentPassword);
                             // Verify authenticated encryption before attempting database load.
                             unlocked=record.open(secret);
                         }else{
-                            AtomicFile storage=file(db);
-                            if(storage.getBaseFile().length()>32768)throw new IOException("Enrollment record too large");
-                            record=UnlockRecord.decode(db,storage.readFully());
-                            secret=token.get(pin,record.credential,record.salt);
+                            FidoToken.Assertion assertion=token.get(pin,enrolled.credentials(),enrolled.entries.get(0).record.salt);
+                            secret=assertion.secret;
+                            record=enrolled.find(assertion.credential.id).record;
                             unlocked=record.open(secret);
                         }
                 }finally{io=null;}
@@ -180,26 +186,40 @@ public final class FidoUnlock {
         UnlockRecord record=pending;pending=null;waitingDatabase=false;
         try{
             if(success&&record!=null){
-                AtomicFile storage=file(record.database);FileOutputStream stream=null;
-                try{stream=storage.startWrite();stream.write(record.encode());storage.finishWrite(stream);}
-                catch(Exception e){if(stream!=null)storage.failWrite(stream);throw e;}
-                UnlockRecord.decode(record.database,storage.readFully());
-                message("USB token enrolled. Keep your master password for recovery.");
+                EnrollmentStorage.replace(activity,snapshot,snapshot.add(tokenName,record));
+                message("Token hinzugefügt. Master Password und gegebenenfalls Key File für Recovery behalten.");
             }else if(!success)message("Database unlock failed. Enrollment was not changed. Use the master password.");
         }catch(Exception e){message("Database opened, but enrollment could not be saved.");}
         finally{cancel();}
     }
     public void remove(Uri uri){
         if(uri==null||busy)return;
-        new AlertDialog.Builder(activity).setTitle("Remove local token enrollment?")
-                .setMessage("The database and token remain unchanged. You will need the master password.")
-                .setNegativeButton("Cancel",null).setPositiveButton("Remove",(d,w)->{
-                    try{file(uri.toString()).delete();message("Local enrollment removed.");}catch(Exception e){message("Could not remove enrollment.");}
-                }).show();
+        try{
+            final EnrollmentSet current=EnrollmentStorage.read(activity,uri.toString());
+            if(current.entries.isEmpty()){message("Keine Tokens für diese Datenbank gespeichert.");return;}
+            String[] names=new String[current.entries.size()];
+            for(int i=0;i<names.length;i++)names[i]=current.entries.get(i).name;
+            dialog=new AlertDialog.Builder(activity).setTitle("Tokens verwalten ("+names.length+"/5)")
+                .setItems(names,(d,which)->{
+                    final EnrollmentSet.Entry selected=current.entries.get(which);
+                    dialog=new AlertDialog.Builder(activity).setTitle("Token entfernen: "+selected.name+"?")
+                        .setMessage(current.entries.size()==1
+                            ?"Dies ist der letzte lokale Token-Zugang. Master Password und gegebenenfalls Key File bleiben erforderlich. Datenbank und Token werden nicht verändert."
+                            :"Nur dieses Enrollment auf diesem Gerät wird entfernt. Andere Tokens, Datenbank und Key File bleiben unverändert.")
+                        .setNegativeButton("Cancel",null).setPositiveButton("Entfernen",(confirm,w)->{
+                            try{
+                                EnrollmentStorage.replace(activity,current,current.remove(selected.record.credential.id));
+                                message("Lokales Token-Enrollment entfernt.");
+                            }catch(Exception e){message(e.getMessage());}
+                        }).create();
+                    dialog.show();
+                }).setNegativeButton("Cancel",null).create();
+            dialog.show();
+        }catch(Exception e){message("Cannot read token enrollments. "+e.getMessage());}
     }
     public void cancel(){
         Crypto.wipe(pendingPin);pendingPin=null;
-        keyFile=null;
+        keyFile=null;snapshot=null;tokenName=null;
         generation++;busy=false;waitingDatabase=false;pending=null;device=null;
         Crypto.wipe(proofKey);Crypto.wipe(passwordProof);proofKey=null;passwordProof=null;
         UsbIo active=io;if(active!=null)active.close();

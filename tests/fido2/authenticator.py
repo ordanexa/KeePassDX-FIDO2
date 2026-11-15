@@ -33,7 +33,7 @@ def respond(raw):
     cmd=raw[0]; a=cbor.decode(raw[1:]) if len(raw)>1 else {}
     if cmd==4:
         return {1:['FIDO_2_1'],2:[] if mode=='no_hmac' else ['hmac-secret'],3:b'A'*16,
-                4:{'clientPin':True,'pinUvAuthToken':version==2},5:1024,6:[version]}
+                4:{'clientPin':True,'pinUvAuthToken':version==2},5:1024,6:[version],7:5}
     if cmd==6:
         assert a[1]==version
         if a[2]==1:return {3:2 if mode=='low_retries' else 8}
@@ -58,6 +58,7 @@ def respond(raw):
         assert a[2]['id']==RP and a[7]=={'rk':False} and a[6]=={'hmac-secret':True}
         assert a[4]==[{'type':'public-key','alg':-7}]
         assert a[9]==version and hmac.compare_digest(a[8],proto.authenticate(token,a[1]))
+        if any(d['id']==cred_id for d in a.get(5,[])):return 0x19
         flags=0xc1 if mode=='create_no_uv' else 0xc5
         ad=hashlib.sha256(RP.encode()).digest()+bytes([flags])+b'\0'*4+b'A'*16+len(cred_id).to_bytes(2,'big')+cred_id+cbor.encode(public_cose(credential))+cbor.encode({'hmac-secret':True})
         return {1:'packed',2:ad,3:{'alg':-7,'sig':credential.sign(ad+a[1],ec.ECDSA(hashes.SHA256()))}}
@@ -65,7 +66,8 @@ def respond(raw):
         if not authorized or not permissions & 2:return 0x33
         authorized=False;permissions=0;completed_operations+=1
         assert a[1]==RP and a[5]=={'up':True}
-        assert a[3]==[{'type':'public-key','id':cred_id}]
+        assert 1<=len(a[3])<=5 and all(d['type']=='public-key' for d in a[3])
+        if not any(d['id']==cred_id for d in a[3]):return 0x2e
         assert a[7]==version and hmac.compare_digest(a[6],proto.authenticate(token,a[2]))
         hs=a[4]['hmac-secret'];assert hs[4]==version
         s=shared(hs[1]);assert hmac.compare_digest(hs[3],proto.authenticate(s,hs[2]))

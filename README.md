@@ -12,7 +12,7 @@ This is an independent, experimental modification of [Kunzisoft/KeePassDX](https
 
 **Current release: 0.1.6-test**, with optional per-database Key Files for both Master Password and Token + PIN unlock, configured through the login menu. Build, 306 protocol checks, 10 Android unit tests, release lint and signing checks passed; physical-device acceptance of the Key File changes remains pending. Earlier releases remain available.
 
-**0.1.7 test candidate:** the default branch adds a no-display USB attachment handler intended to avoid repeated permission prompts after Android's initial default-handler association. It does not open the KeePass UI or access the token on attachment. Device/browser acceptance and a public GitHub release are pending. See [USB behavior and test steps](docs/fido2-usb-attach.md).
+**0.1.8 test candidate:** the default branch supports up to five named, independent USB tokens per database and app installation. Existing single-token enrollment is retained. Use **Token hinzufügen** and **Tokens verwalten**; see [multiple-token behavior, recovery and tests](docs/fido2-multiple-tokens.md). It also includes the [quiet USB handler from 0.1.7](docs/fido2-usb-attach.md). Physical multi-token acceptance and public release publication are pending; the download above remains the last verified public GitHub release.
 
 | Requirement | Supported scope |
 | --- | --- |
@@ -32,6 +32,7 @@ Install an update over the existing FIDO2 test app to keep its local enrollment.
 - **Separate enrollment prompts** for the database master password and token PIN, so enrollment remains available with the token plugged in.
 - **A simplified unlock screen:** the legacy hardware-key/YubiKey row is hidden. From 0.1.6, the Key File and password switches are also hidden; optional Key Files are managed through the login menu.
 - **Optional Key File (from 0.1.6):** associate an existing file per database through **Key File zuordnen / ändern**. It is used for both manual and token unlock. See [Key File behavior and testing](docs/fido2-key-file.md).
+- **Multiple alternative tokens (0.1.8 candidate):** up to five named tokens; individual removal and automatic selection on unlock.
 - **Persistent local enrollment** that survives closing the database and restarting the app.
 - **A FIDO2 badge on the launcher icon** since 0.1.4, including themed-icon support.
 
@@ -42,7 +43,7 @@ The underlying KeePassDX editor, groups, entries, search, Autofill, Magikeyboard
 1. Back up your KDBX and keep its master password in a safe, independent place.
 2. Install the FIDO2 APK and select your database. With 0.1.6, if the database requires a Key File, associate that file through **Key File zuordnen** before enrollment. Earlier releases support the password-only flow.
 3. Connect the Token2 PIN+ Dual by USB-C.
-4. Open the menu and choose **Enroll USB token**.
+4. Open the menu and choose **Token hinzufügen** (called **Enroll USB token** through 0.1.7).
 5. Enter the **database master password** in the separate enrollment dialog.
 6. Grant the Android USB permission when requested, enter the **token PIN**, and touch the token when prompted.
 7. After successful enrollment, lock the database and verify token unlock.
@@ -59,11 +60,11 @@ Enrollment is saved only after the supplied master password successfully opens t
 
 | Situation | What to do |
 | --- | --- |
-| Token lost or reset | Open with the master password, then enroll a replacement |
+| Token lost or reset | Open with the master password, then add a replacement |
 | App reinstalled, app data cleared or new Android device | Open with the master password and enroll on that installation |
-| Database master password changed | Use the new master password and enroll again |
+| Database master password changed | Remove and add each local token again using the new master password |
 | Database selected through a different document URI | Enrollment may need to be repeated for that URI |
-| Remove token enrollment | Deletes only this app's local enrollment record; leaves the database and token unchanged |
+| Remove token enrollment | Removes only the selected local token enrollment; leaves the database and token unchanged |
 
 **Unplugging the token does not lock an already open database.** KeePassDX's normal session-lock settings still apply.
 
@@ -77,8 +78,8 @@ The enrollment record is stored in the app's private `filesDir/fido2-v1` directo
 
 - USB only: **NFC is not implemented** in this integration.
 - Other security-key models are not currently supported by the device filter.
-- Optional Key Files are included from 0.1.6; physical-device validation is pending. Simultaneous backup-token enrollment remains outside the supported flow.
-- One enrollment per database URI per Android installation; enrolling another token replaces that local enrollment.
+- Optional Key Files are included from 0.1.6; physical-device validation is pending. From 0.1.8, up to five alternative tokens can be enrolled; connect only one USB token at a time.
+- From 0.1.8, up to five named enrollments per database URI per Android installation. Adding a token preserves existing ones. Each device requires its own enrollment; synchronizing the KDBX alone does not transfer token unlock.
 - Failed PIN authentication is not retried automatically.
 - **Experimental test build, not an independently security-audited release.** Java/Android cannot guarantee complete memory zeroization.
 
