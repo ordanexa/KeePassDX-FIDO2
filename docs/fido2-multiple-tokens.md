@@ -43,3 +43,13 @@ Physical acceptance remains pending:
 5. Test a wrong token PIN once only when known retries are sufficient; no automatic retry must occur.
 6. Remove only the backup entry; the daily token must still work, and the removed token must fail for this database.
 7. Verify manual recovery, app restart, and the existing quiet USB/browser-login behavior. Higher token counts need real hardware before being described as device-verified.
+
+## Verified build (2026-11-15)
+
+- APK source: `237f149d50d607ddf8bd9d9705448144f49d7d45`.
+- Version: `4.5.8-fido2-0.1.8-test`; version code `45808`.
+- Local results: 583 independent protocol checks and 19 Android unit tests, zero test failures/errors; release assembly and release lint passed. CI reran the protocol and Android suites, release build and lint successfully.
+- Downloaded artifact archive digest and APK checksum matched. Source marker, application ID, version, original test signing certificate, zip alignment and unchanged permissions were verified; app backup remains disabled.
+- APK SHA-256: `1dd5dd860d5675ec60e72b930dca8de3732abd3a6d51d8eff9d547aba66d5861`.
+- [Published test release](https://github.com/ordanexa/KeePassDX-FIDO2/releases/tag/v0.1.8-test): the published APK digest matches the locally verified APK, with SHA256SUMS and SOURCE_COMMIT attached. Release tag points to the APK source commit.
+- Physical multi-token acceptance remains pending; automated/simulator checks are not a substitute for testing both physical tokens and recovery.
