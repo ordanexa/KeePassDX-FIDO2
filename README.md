@@ -8,11 +8,11 @@ This is an independent, experimental modification of [Kunzisoft/KeePassDX](https
 
 ## Download
 
-**[Download the 0.1.6 test APK](https://github.com/ordanexa/KeePassDX-FIDO2/releases/download/v0.1.6-test/keepassdx-fido2-0.1.6-test.apk)** · [Release notes and downloads](https://github.com/ordanexa/KeePassDX-FIDO2/releases)
+**[Download the 0.1.8 test APK](https://github.com/ordanexa/KeePassDX-FIDO2/releases/download/v0.1.8-test/keepassdx-fido2-0.1.8-test.apk)** · [Release notes and downloads](https://github.com/ordanexa/KeePassDX-FIDO2/releases)
 
-**Current release: 0.1.6-test**, with optional per-database Key Files for both Master Password and Token + PIN unlock, configured through the login menu. Build, 306 protocol checks, 10 Android unit tests, release lint and signing checks passed; physical-device acceptance of the Key File changes remains pending. Earlier releases remain available.
+**Current test release: 0.1.8-test**, with up to five named alternative tokens per database and Android installation, individual removal, automatic token selection and preservation of existing single-token enrollment. Includes optional Key Files and the quiet USB handler from 0.1.7. Build, 583 protocol checks, 19 Android unit tests, release lint and signing checks passed. Physical multi-token acceptance remains pending. Earlier releases remain available.
 
-**0.1.8 test candidate:** the default branch supports up to five named, independent USB tokens per database and app installation. Existing single-token enrollment is retained. Use **Token hinzufügen** and **Tokens verwalten**; see [multiple-token behavior, recovery and tests](docs/fido2-multiple-tokens.md). It also includes the [quiet USB handler from 0.1.7](docs/fido2-usb-attach.md). Physical multi-token acceptance and public release publication are pending; the download above remains the last verified public GitHub release.
+Use **Token hinzufügen** and **Tokens verwalten**. See [multiple-token behavior, recovery and tests](docs/fido2-multiple-tokens.md) and [quiet USB behavior](docs/fido2-usb-attach.md). Install over the existing app; do not uninstall or clear its data.
 
 | Requirement | Supported scope |
 | --- | --- |
@@ -32,7 +32,7 @@ Install an update over the existing FIDO2 test app to keep its local enrollment.
 - **Separate enrollment prompts** for the database master password and token PIN, so enrollment remains available with the token plugged in.
 - **A simplified unlock screen:** the legacy hardware-key/YubiKey row is hidden. From 0.1.6, the Key File and password switches are also hidden; optional Key Files are managed through the login menu.
 - **Optional Key File (from 0.1.6):** associate an existing file per database through **Key File zuordnen / ändern**. It is used for both manual and token unlock. See [Key File behavior and testing](docs/fido2-key-file.md).
-- **Multiple alternative tokens (0.1.8 candidate):** up to five named tokens; individual removal and automatic selection on unlock.
+- **Multiple alternative tokens (from 0.1.8):** up to five named tokens; individual removal and automatic selection on unlock.
 - **Persistent local enrollment** that survives closing the database and restarting the app.
 - **A FIDO2 badge on the launcher icon** since 0.1.4, including themed-icon support.
 
@@ -41,7 +41,7 @@ The underlying KeePassDX editor, groups, entries, search, Autofill, Magikeyboard
 ## First-time enrollment
 
 1. Back up your KDBX and keep its master password in a safe, independent place.
-2. Install the FIDO2 APK and select your database. With 0.1.6, if the database requires a Key File, associate that file through **Key File zuordnen** before enrollment. Earlier releases support the password-only flow.
+2. Install the FIDO2 APK and select your database. From 0.1.6, if the database requires a Key File, associate that file through **Key File zuordnen** before enrollment. Earlier releases support the password-only flow.
 3. Connect the Token2 PIN+ Dual by USB-C.
 4. Open the menu and choose **Token hinzufügen** (called **Enroll USB token** through 0.1.7).
 5. Enter the **database master password** in the separate enrollment dialog.
@@ -87,9 +87,11 @@ The owner reported successful device use of enrollment, persistent unlock and th
 
 The 0.1.6 build passed 306 protocol checks, 10 Android unit tests, release build, release lint, signing and alignment checks. The downloaded APK checksum and source marker were verified, and the published GitHub asset matches the verified APK. Application ID and signing identity are unchanged; app backup remains disabled. See the [0.1.6 release](https://github.com/ordanexa/KeePassDX-FIDO2/releases/tag/v0.1.6-test) and [Key File validation](docs/fido2-key-file.md) for the checksum, source commit and test scope.
 
+The 0.1.8 APK and published asset were verified against source `237f149d50d607ddf8bd9d9705448144f49d7d45`; 583 protocol checks, 19 Android unit tests, release build/lint, signing, alignment and unchanged permissions passed. See the [0.1.8 release](https://github.com/ordanexa/KeePassDX-FIDO2/releases/tag/v0.1.8-test) and [multi-token validation](docs/fido2-multiple-tokens.md).
+
 ## Project identity
 
-The repository is `ordanexa/KeePassDX-FIDO2`; the Android app is named **KeePassDX FIDO2** from 0.1.5 onward. The application ID and signing identity are unchanged, so an in-place update preserves app data and local enrollment. Version 0.1.5 introduced the current app label; 0.1.6 adds optional Key File support without changing the enrollment record format.
+The repository is `ordanexa/KeePassDX-FIDO2`; the Android app is named **KeePassDX FIDO2** from 0.1.5 onward. The application ID and signing identity are unchanged, so an in-place update preserves app data and local enrollment. Version 0.1.5 introduced the current app label; 0.1.6 added optional Key Files. Version 0.1.8 reads legacy enrollment and writes a versioned collection when adding/removing tokens, preserving the original encrypted envelope.
 
 ## Development and upstream updates
 
