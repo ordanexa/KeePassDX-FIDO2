@@ -28,9 +28,9 @@ Install an update over the existing FIDO2 test app to keep its local enrollment.
 
 ## Development: token + fingerprint (0.1.9)
 
-The next test build adds **Token + Fingerprint**: save a verified token PIN with a strong biometric, then release that PIN with a fresh biometric authorization while the USB token remains required. Setup is **Token PIN für Fingerprint speichern** in the login menu. A separate button starts subsequent unlocks. With several enrollments, select the connected token by name; no automatic PIN trials occur. Manual PIN and Master Password recovery remain available.
+The 0.1.9 test build adds **Token + Fingerprint**: save a verified token PIN with a strong biometric, then release that PIN with a fresh biometric authorization while the USB token remains required. Setup is **Token PIN für Fingerprint speichern** in the login menu. A separate button starts subsequent unlocks. With several enrollments, select the connected token by name; no automatic PIN trials occur. Manual PIN and Master Password recovery remain available.
 
-The FIDO2 flavor disables upstream tokenless biometric database unlock. PIN storage is local, encrypted with a per-use biometric Android Keystore key and requires hardware-backed key storage. Physical sensor/token acceptance and signing with the existing release identity remain separate checks. See [setup, security boundaries and acceptance](docs/fido2-unlock-ui.md#token--fingerprint-019-development). The download above remains the published **0.1.8** build until a signed successor is released.
+The FIDO2 flavor disables upstream tokenless biometric database unlock. PIN storage is local, encrypted with a per-use biometric Android Keystore key and requires hardware-backed key storage. The signed APK was verified with the existing release identity; physical sensor/token acceptance remains pending. See [setup, security boundaries and acceptance](docs/fido2-unlock-ui.md#token--fingerprint-019-development). The download above remains the published **0.1.8** release. The signed **0.1.9-test** artifact is available from [CI build 44819824892](https://github.com/ordanexa/fidoparole-android-reader/actions/runs/44819824892); this is not yet a separate GitHub release.
 
 ## What this fork adds
 

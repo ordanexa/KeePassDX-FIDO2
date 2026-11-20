@@ -70,4 +70,14 @@ References: [Android biometric CryptoObject](https://developer.android.com/ident
 - Unsigned release assembly and release vital lint passed on the final code.
 - Android/Robolectric: 23 FIDO2 tests passed (including four new biometric-PIN tests), zero failures/errors.
 - The full lint run reported five errors in unchanged upstream files (SuspiciousIndentation, RestrictedApi, StringFormatInvalid and two UnsafeImplicitIntentLaunch findings). It also found a MissingTranslation error for the new button label; that label is now explicitly non-translatable. Full lint is not a clean gate for this checkout; no global suppression or unrelated upstream code changes were added.
-- Test version: `4.5.8-fido2-0.1.9-test`, version code `45809`, unchanged application ID. Signing/publication and physical acceptance remain pending.
+- Test version: `4.5.8-fido2-0.1.9-test`, version code `45809`, unchanged application ID. The signed CI artifact is verified; physical acceptance remains pending.
+
+
+### Verified signed 0.1.9 artifact
+
+- [GitHub Actions build 44819824892](https://github.com/ordanexa/fidoparole-android-reader/actions/runs/44819824892) completed successfully, including protocol checks, Android unit tests, release assembly, signing and artifact upload.
+- APK source: `7c69d2605ab0a13d85d5c6a6272ce7c97819973d`; source marker checked against the downloaded artifact.
+- Artifact ZIP SHA-256 matched GitHub's digest: `342ab85fda406142488a72c665161ab83a7259678609f72949ea7e9471bfde95`.
+- APK SHA-256: `890f9ddcaeb38ffb19924e2dbdfb2d7ffbd90fbd72eea4d334280aca4b9dd011`.
+- APK v3 signature, original signing certificate SHA-256 `707f6d453412ec20afbf0aa498d6c63d07c3d4548688030b45f5cd7b04c8b485`, ZIP alignment, application ID, version code `45809`, minSdk 33 and targetSdk 36 independently checked after download.
+- Install as an in-place update. Existing enrollments are preserved; enable PIN storage explicitly through the login menu. Real sensor/token acceptance remains pending.
