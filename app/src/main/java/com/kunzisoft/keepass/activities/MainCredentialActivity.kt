@@ -126,7 +126,8 @@ class MainCredentialActivity : DatabaseModeActivity() {
         val pinMode = connected && !masterPasswordOverride
         val changed = pinMode != mainCredentialView.isTokenPinMode
         mainCredentialView.setTokenPinMode(pinMode)
-        deviceUnlockButton?.isVisible = !pinMode
+        deviceUnlockButton?.isVisible = false
+        fidoFingerprintButton?.isVisible = pinMode
         if (changed) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (pinMode) mDeviceUnlockViewModel?.disconnect()
@@ -152,6 +153,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     private var filenameView: TextView? = null
     private var logotypeButton: View? = null
     private var deviceUnlockButton: View? = null
+    private var fidoFingerprintButton: View? = null
     private lateinit var mainCredentialView: MainCredentialView
     private var confirmButtonView: Button? = null
     private var infoContainerView: ViewGroup? = null
@@ -160,7 +162,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
     private val mMainCredentialViewModel: MainCredentialViewModel by viewModels()
     private val mDeviceUnlockViewModel: DeviceUnlockViewModel? by lazy {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && com.kunzisoft.keepass.BuildConfig.BUILD_VERSION != "fido2") {
             ViewModelProvider(this)[DeviceUnlockViewModel::class.java]
         } else null
     }
@@ -202,12 +204,17 @@ class MainCredentialActivity : DatabaseModeActivity() {
         filenameView = findViewById(R.id.filename)
         logotypeButton = findViewById(R.id.activity_password_logotype)
         deviceUnlockButton = findViewById(R.id.fragment_device_unlock_container_view)
+        fidoFingerprintButton = findViewById(R.id.fido_fingerprint_button)
+        fidoFingerprintButton?.setOnClickListener {
+            mainCredentialView.populatePasswordTextView(null)
+            fidoUnlock?.beginFingerprint(mMainCredentialViewModel.databaseFileUri, mainCredentialView.selectedKeyFile())
+        }
         mainCredentialView = findViewById(R.id.activity_password_credentials)
         confirmButtonView = findViewById(R.id.activity_password_open_button)
         infoContainerView = findViewById(R.id.activity_password_info_container)
         coordinatorLayout = findViewById(R.id.activity_password_coordinator_layout)
 
-        if (com.kunzisoft.keepass.BuildConfig.BUILD_VERSION == "fido2" && Build.VERSION.SDK_INT >= 26) {
+        if (com.kunzisoft.keepass.BuildConfig.BUILD_VERSION == "fido2" && Build.VERSION.SDK_INT >= 33) {
             mainCredentialView.configureFido2Input()
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
             fidoUnlock = com.kunzisoft.keepass.fido2.FidoUnlock(this) { recoveredPassword, selectedKeyFile ->
@@ -409,7 +416,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         refreshFidoInputMode()
 
         // Init Biometric elements only if allowed
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+        if (fidoUnlock == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
             && PreferencesUtil.isDeviceUnlockEnable(this)) {
             deviceUnlockFragment = supportFragmentManager
                 .findFragmentByTag(UNLOCK_FRAGMENT_TAG) as? DeviceUnlockFragment?
@@ -559,7 +566,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     private fun onCredentialEncrypted(cipherEncryptDatabase: CipherEncryptDatabase) {
-        if (mainCredentialView.isTokenPinMode) return
+        if (fidoUnlock != null || mainCredentialView.isTokenPinMode) return
         fidoUnlock?.cancel()
         // Load the database if password is registered with biometric
         mMainCredentialViewModel.loadDatabase(
@@ -570,7 +577,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
     }
 
     private fun onCredentialDecrypted(cipherDecryptDatabase: CipherDecryptDatabase) {
-        if (mainCredentialView.isTokenPinMode) return
+        if (fidoUnlock != null || mainCredentialView.isTokenPinMode) return
         fidoUnlock?.cancel()
         // Load the database if password is retrieve from biometric
         // Retrieve from biometric
@@ -618,6 +625,9 @@ class MainCredentialActivity : DatabaseModeActivity() {
             menu.add(0, FIDO_UNLOCK, 0, "Unlock with USB token")
             menu.add(0, FIDO_ENROLL, 1, "Token hinzufügen")
             menu.add(0, FIDO_REMOVE, 2, "Tokens verwalten")
+            menu.add(0, FIDO_FINGERPRINT, 6, "Token + Fingerprint")
+            menu.add(0, FIDO_PIN_SAVE, 7, "Token PIN für Fingerprint speichern")
+            menu.add(0, FIDO_PIN_REMOVE, 8, "Gespeicherte Token PINs entfernen")
             menu.add(0, FIDO_MASTER_PASSWORD, 3, "Master Password verwenden")
             menu.add(0, FIDO_KEY_FILE, 4, if (mainCredentialView.selectedKeyFile() == null)
                 "Key File zuordnen" else "Key File ändern")
@@ -807,6 +817,20 @@ class MainCredentialActivity : DatabaseModeActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
 
         when (item.itemId) {
+            FIDO_FINGERPRINT -> {
+                mainCredentialView.populatePasswordTextView(null)
+                fidoUnlock?.beginFingerprint(mMainCredentialViewModel.databaseFileUri, mainCredentialView.selectedKeyFile())
+                return true
+            }
+            FIDO_PIN_SAVE -> {
+                mainCredentialView.populatePasswordTextView(null)
+                fidoUnlock?.beginSavePin(mMainCredentialViewModel.databaseFileUri, mainCredentialView.selectedKeyFile())
+                return true
+            }
+            FIDO_PIN_REMOVE -> {
+                fidoUnlock?.removeSavedPins(mMainCredentialViewModel.databaseFileUri)
+                return true
+            }
             FIDO_KEY_FILE -> {
                 fidoUnlock?.cancel()
                 keyFilePickerDatabase = mMainCredentialViewModel.databaseFileUri
@@ -908,6 +932,9 @@ class MainCredentialActivity : DatabaseModeActivity() {
         private const val FIDO_MASTER_PASSWORD = 0x7f0f7104
         private const val FIDO_KEY_FILE = 0x7f0f7105
         private const val FIDO_KEY_FILE_REMOVE = 0x7f0f7106
+        private const val FIDO_FINGERPRINT = 0x7f0f7107
+        private const val FIDO_PIN_SAVE = 0x7f0f7108
+        private const val FIDO_PIN_REMOVE = 0x7f0f7109
 
         private val TAG = MainCredentialActivity::class.java.name
 

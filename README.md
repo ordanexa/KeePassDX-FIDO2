@@ -26,6 +26,12 @@ Use **Token hinzufügen** and **Tokens verwalten**. See [multiple-token behavior
 
 Install an update over the existing FIDO2 test app to keep its local enrollment. Do not uninstall or clear app data first. Store/F-Droid releases of the original project do **not** include this fork's USB unlock integration.
 
+## Development: token + fingerprint (0.1.9)
+
+The next test build adds **Token + Fingerprint**: save a verified token PIN with a strong biometric, then release that PIN with a fresh biometric authorization while the USB token remains required. Setup is **Token PIN für Fingerprint speichern** in the login menu. A separate button starts subsequent unlocks. With several enrollments, select the connected token by name; no automatic PIN trials occur. Manual PIN and Master Password recovery remain available.
+
+The FIDO2 flavor disables upstream tokenless biometric database unlock. PIN storage is local, encrypted with a per-use biometric Android Keystore key and requires hardware-backed key storage. Physical sensor/token acceptance and signing with the existing release identity remain separate checks. See [setup, security boundaries and acceptance](docs/fido2-unlock-ui.md#token--fingerprint-019-development). The download above remains the published **0.1.8** build until a signed successor is released.
+
 ## What this fork adds
 
 - **USB token + PIN unlock** after one-time enrollment, without typing the database master password each time.
@@ -74,7 +80,7 @@ Enrollment is saved only after the supplied master password successfully opens t
 
 The PIN authorizes a FIDO2 operation on the token; it is not the KDBX password. The token's `hmac-secret` output is passed through HKDF-SHA256 to derive an AES-256-GCM key. That key encrypts a local copy of the database master password. After token authorization, the app decrypts the password and supplies it to KeePassDX's existing database-opening pipeline.
 
-The enrollment record is stored in the app's private `filesDir/fido2-v1` directory and bound to the database URI and credential metadata. The FIDO2 variant disables app backup and excludes app data from configured backup/transfer mechanisms. The integration does not persist the PIN or a plaintext copy of the master password. An unlocked app necessarily handles the recovered password in memory.
+The enrollment record is stored in the app's private `filesDir/fido2-v1` directory and bound to the database URI and credential metadata. The FIDO2 variant disables app backup and excludes app data from configured backup/transfer mechanisms. The integration never persists a plaintext PIN or plaintext copy of the master password. The 0.1.9 development feature can optionally persist the PIN encrypted under a hardware-backed, per-use biometric Android Keystore key. An unlocked app necessarily handles the recovered password in memory.
 
 ## Scope and validation
 

@@ -14,8 +14,8 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Activity-scoped coordinator. No new plaintext persistence; unlock uses the existing KeePassDX pipeline. */
-@TargetApi(26)
+/** Activity-scoped coordinator. No plaintext persistence; biometric storage holds only an encrypted PIN. */
+@TargetApi(33)
 public final class FidoUnlock {
     public interface Callback { void unlock(char[] password, Uri keyFile); }
     private final Activity activity;
@@ -38,9 +38,13 @@ public final class FidoUnlock {
     private String tokenName;
     private boolean waitingDatabase;
     private byte[] proofKey, passwordProof;
+    private final BiometricPin biometricPin;
+    private boolean savePinRequested;
+    private EnrollmentSet.Entry fingerprintEntry;
 
     public FidoUnlock(Activity activity,Callback callback) {
         this.activity=activity;this.callback=callback;
+        biometricPin=new BiometricPin(activity);
         manager=(UsbManager)activity.getSystemService(Context.USB_SERVICE);
         permissionAction=activity.getPackageName()+".FIDO_USB_PERMISSION";
         IntentFilter filter=new IntentFilter(permissionAction);
@@ -72,10 +76,47 @@ public final class FidoUnlock {
         }catch(Exception e){message(e.getMessage());}
         finally{Arrays.fill(suppliedPin,'\0');Crypto.wipe(bytes);}
     }
+    public void beginSavePin(Uri uri,Uri selectedKeyFile){
+        if(!BiometricPin.available(activity)){message("Starke Biometrie einrichten; anschließend erneut versuchen.");return;}
+        begin(uri,null,false,null,selectedKeyFile,null,true,null);
+    }
+    public void beginFingerprint(Uri uri,Uri selectedKeyFile){
+        if(busy){message("A token operation is already running.");return;}
+        cancel();
+        if(uri==null){message("Select a database first.");return;}
+        try{
+            EnrollmentSet current=EnrollmentStorage.read(activity,uri.toString());
+            List<EnrollmentSet.Entry> saved=new ArrayList<>();
+            for(EnrollmentSet.Entry entry:current.entries)if(biometricPin.has(entry.record))saved.add(entry);
+            if(saved.isEmpty()){message("Zuerst im Menü Token PIN für Fingerprint speichern wählen.");return;}
+            if(current.entries.size()==1){begin(uri,null,false,null,selectedKeyFile,null,false,saved.get(0));return;}
+            String[] names=new String[saved.size()];for(int i=0;i<names.length;i++)names[i]=saved.get(i).name;
+            dialog=new AlertDialog.Builder(activity).setTitle("Angeschlossenen Token wählen")
+                    .setItems(names,(d,which)->begin(uri,null,false,null,selectedKeyFile,null,false,saved.get(which)))
+                    .setNegativeButton("Abbrechen",(d,w)->cancel()).create();
+            dialog.setOnCancelListener(d->cancel());dialog.show();
+        }catch(Exception error){cancel();message("Gespeicherte PIN nicht verfügbar. Token PIN manuell eingeben.");}
+    }
+    public void removeSavedPins(Uri uri){
+        if(busy||uri==null)return;
+        cancel();
+        dialog=new AlertDialog.Builder(activity).setTitle("Gespeicherte Token PINs entfernen?")
+                .setMessage("Entfernt die Fingerprint-PINs dieser Datenbank auf diesem Gerät. Token-Enrollment und Datenbank bleiben erhalten.")
+                .setNegativeButton("Abbrechen",null).setPositiveButton("Entfernen",(d,w)->{
+                    try{for(EnrollmentSet.Entry entry:EnrollmentStorage.read(activity,uri.toString()).entries)biometricPin.remove(entry.record);
+                        message("Gespeicherte Token PINs entfernt.");}
+                    catch(Exception error){message("PIN-Speicher konnte nicht vollständig entfernt werden.");}
+                }).create();
+        dialog.show();
+    }
     public void beginEnrollment(Uri uri,char[] suppliedPassword,String name,Uri selectedKeyFile){
         begin(uri,suppliedPassword,true,null,selectedKeyFile,name);
     }
     private void begin(Uri uri,char[] suppliedPassword,boolean enroll,byte[] inlinePin,Uri selectedKeyFile,String name){
+        begin(uri,suppliedPassword,enroll,inlinePin,selectedKeyFile,name,false,null);
+    }
+    private void begin(Uri uri,char[] suppliedPassword,boolean enroll,byte[] inlinePin,Uri selectedKeyFile,String name,
+                       boolean savePin,EnrollmentSet.Entry selectedFingerprint){
         if(busy){Crypto.wipe(inlinePin);if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("A token operation is already running.");return;}
         cancel();pendingPin=inlinePin;
         if(uri==null){if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');cancel();message("Select a database first.");return;}
@@ -83,10 +124,16 @@ public final class FidoUnlock {
             if(suppliedPassword!=null)Arrays.fill(suppliedPassword,'\0');message("Enter the database master password first.");return;
         }
         database=uri.toString();enrolling=enroll;password=suppliedPassword;keyFile=selectedKeyFile;
+        savePinRequested=savePin;fingerprintEntry=selectedFingerprint;
         try{
             snapshot=EnrollmentStorage.read(activity,database);
             if(enroll){snapshot.checkAddition(name);tokenName=EnrollmentSet.validateName(name);}
             else if(snapshot.entries.isEmpty())throw new IOException("No token enrolled for this database on this device. Use Token hinzufügen first.");
+            if(selectedFingerprint!=null){
+                EnrollmentSet.Entry latest=snapshot.find(selectedFingerprint.record.credential.id);
+                if(!MessageDigest.isEqual(latest.record.encode(),selectedFingerprint.record.encode()))
+                    throw new IOException("Enrollment changed. Please try again.");
+            }
             List<UsbDevice> matches=new ArrayList<>();
             for(UsbDevice d:manager.getDeviceList().values())if(d.getVendorId()==0x349e&&d.getProductId()==0x0024)matches.add(d);
             if(matches.size()!=1)throw new IOException("Connect exactly one Token2 PIN+ Dual over USB-C.");
@@ -98,16 +145,27 @@ public final class FidoUnlock {
     }
     private void permissionReady(){
         if(pendingPin!=null){byte[] pin=pendingPin;pendingPin=null;run(pin);}
-        else promptPin();
+        else if(fingerprintEntry!=null){
+            final int request=generation;
+            biometricPin.authenticate(fingerprintEntry,null,new BiometricPin.Callback(){
+                public void complete(byte[] pin){
+                    if(request!=generation||!busy||device==null||!manager.getDeviceList().containsValue(device)){
+                        Crypto.wipe(pin);cancel();return;
+                    }
+                    run(pin);
+                }
+                public void failed(){if(request==generation){cancel();message("Token PIN kann weiterhin manuell eingegeben werden.");}}
+            });
+        }else promptPin();
     }
     private void promptPin(){
         if(!busy||activity.isFinishing())return;
         final EditText pin=new EditText(activity);
         pin.setHint("Token PIN");pin.setSingleLine(true);
         pin.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        pin.setSaveEnabled(false);pin.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        pin.setSaveEnabled(false);pin.setSaveFromParentEnabled(false);pin.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         pin.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
-        dialog=new AlertDialog.Builder(activity).setTitle(enrolling?"Token hinzufügen":"Unlock with USB token")
+        dialog=new AlertDialog.Builder(activity).setTitle(enrolling?"Token hinzufügen":savePinRequested?"Token PIN für Fingerprint speichern":"Unlock with USB token")
                 .setMessage("Enter the token PIN. Touch the token when it blinks. No automatic PIN retries.")
                 .setView(pin).setNegativeButton("Cancel",(d,w)->cancel()).setPositiveButton("Continue",null).create();
         dialog.setOnCancelListener(d->cancel());dialog.setOnDismissListener(d->pin.getText().clear());
@@ -129,6 +187,8 @@ public final class FidoUnlock {
         final boolean enroll=enrolling;
         final EnrollmentSet enrolled=snapshot;
         final UsbDevice selected=device;
+        final boolean savePin=savePinRequested;
+        final EnrollmentSet.Entry biometricEntry=fingerprintEntry;
         final char[] enrollmentPassword=password;password=null;
         dialog=new AlertDialog.Builder(activity).setTitle("USB token")
                 .setMessage("Connecting …").setNegativeButton("Cancel",(d,w)->cancel()).create();
@@ -150,7 +210,8 @@ public final class FidoUnlock {
                             // Verify authenticated encryption before attempting database load.
                             unlocked=record.open(secret);
                         }else{
-                            FidoToken.Assertion assertion=token.get(pin,enrolled.credentials(),enrolled.entries.get(0).record.salt);
+                            FidoToken.Assertion assertion=token.get(pin,biometricEntry==null?enrolled.credentials():
+                                    Collections.singletonList(biometricEntry.record.credential),enrolled.entries.get(0).record.salt);
                             secret=assertion.secret;
                             record=enrolled.find(assertion.credential.id).record;
                             unlocked=record.open(secret);
@@ -158,21 +219,42 @@ public final class FidoUnlock {
                 }finally{io=null;}
                 final char[] result=unlocked;unlocked=null;
                 final UnlockRecord candidate=enroll?record:null;
+                final EnrollmentSet.Entry savedEntry=savePin?enrolled.find(record.credential.id):null;
+                final byte[] verifiedPin=savePin?pin.clone():null;
                 main.post(()->{
-                    if(request!=generation||activity.isFinishing()){Arrays.fill(result,'\0');return;}
+                    if(request!=generation||activity.isFinishing()){Arrays.fill(result,'\0');Crypto.wipe(verifiedPin);return;}
                     if(dialog!=null){dialog.dismiss();dialog=null;}
-                    try {
-                        proofKey=Crypto.random(32);
-                        byte[] encoded=UnlockRecord.encodeChars(result);
-                        try { passwordProof=Crypto.hmac(proofKey,encoded); } finally { Crypto.wipe(encoded); }
-                    } catch(Exception error) { Arrays.fill(result,'\0');cancel();message("Cannot verify pending enrollment.");return; }
-                    pending=candidate;waitingDatabase=true;
-                    // Ownership of result transfers to KeePassDX's existing credential pipeline.
-                    callback.unlock(result,requestKeyFile);
+                    if(savePin){
+                        // Keep the recovered password owned by cancel() while the prompt is visible.
+                        password=result;
+                        biometricPin.authenticate(savedEntry,verifiedPin,new BiometricPin.Callback(){
+                            public void complete(byte[] unused){
+                                Crypto.wipe(unused);
+                                if(request!=generation)return;
+                                password=null;message("Token PIN für Fingerprint gespeichert.");
+                                deliver(result,candidate,requestKeyFile);
+                            }
+                            public void failed(){if(request==generation){cancel();message("PIN nicht gespeichert. Token PIN bleibt manuell nutzbar.");}}
+                        });
+                    }else deliver(result,candidate,requestKeyFile);
                 });
-            }catch(Exception e){main.post(()->{if(request==generation){cancel();message(e.getMessage());}});}
+            }catch(Exception e){main.post(()->{if(request==generation){
+                if(biometricEntry!=null&&e.getMessage()!=null&&e.getMessage().startsWith("CTAP 0x31")){
+                    try{biometricPin.remove(biometricEntry.record);}catch(Exception ignored){}
+                }
+                cancel();message(e.getMessage());
+            }});}
             finally{Crypto.wipe(pin);Crypto.wipe(secret);if(unlocked!=null)Arrays.fill(unlocked,'\0');if(enrollmentPassword!=null)Arrays.fill(enrollmentPassword,'\0');}
         });
+    }
+    private void deliver(char[] result,UnlockRecord candidate,Uri requestKeyFile){
+        try {
+            proofKey=Crypto.random(32);
+            byte[] encoded=UnlockRecord.encodeChars(result);
+            try { passwordProof=Crypto.hmac(proofKey,encoded); } finally { Crypto.wipe(encoded); }
+        } catch(Exception error) { Arrays.fill(result,'\0');cancel();message("Cannot verify pending enrollment.");return; }
+        pending=candidate;waitingDatabase=true;
+        callback.unlock(result,requestKeyFile);
     }
     public void databaseResult(Uri completedDatabase,char[] completedPassword,Uri completedKeyFile,boolean success){
         if(!waitingDatabase)return;
@@ -209,6 +291,7 @@ public final class FidoUnlock {
                         .setNegativeButton("Cancel",null).setPositiveButton("Entfernen",(confirm,w)->{
                             try{
                                 EnrollmentStorage.replace(activity,current,current.remove(selected.record.credential.id));
+                                biometricPin.remove(selected.record);
                                 message("Lokales Token-Enrollment entfernt.");
                             }catch(Exception e){message(e.getMessage());}
                         }).create();
@@ -218,6 +301,7 @@ public final class FidoUnlock {
         }catch(Exception e){message("Cannot read token enrollments. "+e.getMessage());}
     }
     public void cancel(){
+        biometricPin.cancel();savePinRequested=false;fingerprintEntry=null;
         Crypto.wipe(pendingPin);pendingPin=null;
         keyFile=null;snapshot=null;tokenName=null;
         generation++;busy=false;waitingDatabase=false;pending=null;device=null;
