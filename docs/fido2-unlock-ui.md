@@ -81,3 +81,38 @@ References: [Android biometric CryptoObject](https://developer.android.com/ident
 - APK SHA-256: `890f9ddcaeb38ffb19924e2dbdfb2d7ffbd90fbd72eea4d334280aca4b9dd011`.
 - APK v3 signature, original signing certificate SHA-256 `707f6d453412ec20afbf0aa498d6c63d07c3d4548688030b45f5cd7b04c8b485`, ZIP alignment, application ID, version code `45809`, minSdk 33 and targetSdk 36 independently checked after download.
 - Install as an in-place update. Existing enrollments are preserved; enable PIN storage explicitly through the login menu. Real sensor/token acceptance remains pending.
+
+
+## Device feedback: 0.1.9 (2026-11-21)
+
+The owner reported a successful device test of token + fingerprint in 0.1.9-test. This confirms the reported functional USB/biometric flow. The exact handset and every negative/recovery scenario were not separately enumerated; this is not an independent security audit.
+
+## NFC transport: 0.1.10-test
+
+### Reuse and boundaries
+
+The NFC APDU transport is adapted into Java from Token2's MIT-licensed FidoParole Mobile code, read from `ordanexa/fidoparole-mobile`: `core/src/ctap/nfc.rs` (blob `f73df85dfd49fa690232c58e505d37953bd5986b`) and Android `keys/NfcFido.kt` (blob `3a2f60a740f0bc9423ee176e617b9741cd6fa4e5`). Reader-mode lifetime follows `KeyAccess.kt`: keep Reader Mode enabled until all tag operations have finished. Copyright and the full MIT notice are included in `LICENSES/LICENSE_TOKEN2_FIDOPAROLE` and packaged in `assets/licenses/Token2-FidoParole-MIT.txt`.
+
+`CtapTransport` is the common USB-HID/NFC message interface. `FidoToken` keeps its existing PIN-protocol, hmac-secret, RP, UP/UV, credential-ID and signature validation; no FidoParole vault login, RP, credentials, largeBlob data or PIN store is shared. Existing local token records and biometric PIN bindings are unchanged. Whether a specific physical token exposes its existing credential identically over USB and NFC still needs physical acceptance; the app does not silently enroll a replacement or downgrade verification.
+
+The port adds bounded APDU/response sizes, a per-command deadline, keepalive polling and reader-specific transmit limits. CTAP GET RESPONSE uses the CTAP CLA; the final NFCCTAP_MSG advertises keepalive support via P1. U2F_V2 selection is allowed for dual-protocol keys, but CTAP2 GetInfo, configured client PIN and hmac-secret remain mandatory before PIN authentication. Processing/GET RESPONSE polling never resends the original CTAP/PIN command.
+
+### Use
+
+1. On an NFC-capable Android phone, enable NFC and select the database.
+2. Choose **NFC verwenden** in the login menu. **USB verwenden** switches back to the tested USB path.
+3. Enter the Token PIN and press Open, or use **Token + Fingerprint** with an already saved PIN.
+4. Only when asked, hold the token flat against the phone's NFC antenna until completion. The PIN/biometric step comes first, so the token need not stay in the field while typing or using the sensor.
+5. **Token hinzufügen** and **Token PIN für Fingerprint speichern** use the selected connection as well. Enrollment is still committed only after a successful database load. PIN saving still follows a verified token assertion.
+
+NFC is optional in the manifest; USB use remains available on devices without NFC. There are no NFC intent filters or exported NFC login activities. Scanning is explicit and limited to the current unlock operation. Reader Mode remains active throughout ISO-DEP I/O and is disabled on completion, cancel, timeout, transport change, pause or screen stop. Pending PIN bytes are wiped. An old tag callback after cancellation cannot resume the operation. A lost tag fails the attempt without automatic retry; reconnect by starting a new attempt explicitly. The scan wait times out after 60 seconds.
+
+### Validation and acceptance
+
+The independent Python-authenticator fixture passed 1,933 checks over both USB and a simulated NFC APDU link, including PIN protocols 1/2, fragmented requests/responses, processing polls, wrong PIN, low retry count, missing hmac-secret, UV/UP/RP/credential/signature errors and replay. These are protocol simulations, not RF/hardware tests.
+
+Additional Android/JVM tests cover APDU bounds/status handling/cancellation and Android Reader Mode opt-in, pause cleanup, timeout cleanup and stale-tag rejection. Their CI results and the signed artifact are recorded after build verification.
+
+Physical NFC acceptance is pending: existing enrollment and saved PIN via NFC, manual PIN, explicit enrollment over NFC, required/missing Key Files, token removal during I/O, pause/rotation/cancel, and subsequent USB fallback. Keep the existing USB/master-password recovery paths available.
+
+Protocol references: [FIDO CTAP 2.2, NFC section](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#nfc) and [Android Reader Mode](https://developer.android.com/reference/android/nfc/NfcAdapter#enableReaderMode(android.app.Activity,%20android.nfc.NfcAdapter.ReaderCallback,%20int,%20android.os.Bundle)).

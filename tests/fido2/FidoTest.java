@@ -30,10 +30,40 @@ public final class FidoTest {
         public void close(){write.close();try{if(!process.waitFor(2,java.util.concurrent.TimeUnit.SECONDS))process.destroyForcibly();}catch(InterruptedException e){process.destroyForcibly();}}
     }
 
+    // APDU framing fixture bridges complete messages to the independent Python authenticator.
+    static final class NfcSim implements NfcTransport.Channel {
+        final Hid backend;final ByteArrayOutputStream request=new ByteArrayOutputStream();
+        byte[] response;int position;
+        NfcSim(String mode)throws Exception { backend=new Hid(new Sim(mode));backend.init(); }
+        public int maxLength(){return 80;}
+        byte[] part(){
+            int count=Math.min(37,response.length-position);
+            byte[] data=Arrays.copyOfRange(response,position,position+count);position+=count;
+            int remaining=response.length-position;
+            return Crypto.cat(data,remaining==0?new byte[]{(byte)0x90,0x00}:new byte[]{0x61,(byte)Math.min(remaining,256)});
+        }
+        public byte[] transmit(byte[] apdu)throws Exception {
+            if(Arrays.equals(apdu,NfcTransport.SELECT))return Crypto.cat(Crypto.utf8("U2F_V2"),new byte[]{(byte)0x90,0x00});
+            int instruction=apdu[1]&255;
+            if(instruction==0x11){check((apdu[0]&255)==0x80,"NFC processing poll CLA");return part();}
+            if(instruction==0xc0){check((apdu[0]&255)==0x80,"NFC GET RESPONSE CLA");return part();}
+            check(instruction==0x10,"NFC CTAP command");
+            int size=apdu[4]&255;boolean last=(apdu[0]&255)==0x80;
+            check(apdu.length==5+size+(last?1:0),"NFC request length");
+            check((apdu[2]&255)==(last?0x80:0),"NFC keepalive support flag");
+            request.write(apdu,5,size);
+            if(!last)return new byte[]{(byte)0x90,0x00};
+            response=backend.cbor(request.toByteArray());request.reset();position=0;
+            return new byte[]{0x01,(byte)0x91,0x00};
+        }
+        public void close(){backend.close();}
+    }
+
     public static void main(String[] args)throws Exception{
+        for(boolean nfc:new boolean[]{false,true})
         for(String mode:new String[]{"v1","v2","reauth_rejected","wrong_pin","low_retries","no_hmac","create_no_uv","no_uv","no_up","wrong_rp","wrong_signature","wrong_id","replay"}){
             byte[] pin=Crypto.utf8("123456");
-            try(Hid hid=new Hid(new Sim(mode))){
+            try(CtapTransport hid=nfc?new NfcTransport(new NfcSim(mode),()->{}):new Hid(new Sim(mode))){
                 FidoToken token=new FidoToken(hid,s->{});
                 Attempt flow=()->{
                     try{
@@ -55,7 +85,7 @@ public final class FidoTest {
                 if(mode.equals("v1")||mode.equals("v2"))flow.run();else rejects(flow,"must reject "+mode);
                 check(Arrays.equals(pin,new byte[pin.length]),"PIN wiped");
             }
-            System.out.println("PASS "+mode);
+            System.out.println("PASS "+(nfc?"NFC ":"USB ")+mode);
         }
         // Real wire-format allowList selection, signature validation and duplicate exclusion.
         for(String mode:new String[]{"v1","v2"}){

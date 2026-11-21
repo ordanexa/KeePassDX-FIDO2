@@ -6,13 +6,13 @@ import java.security.*;
 import java.security.spec.*;
 import java.util.*;
 
-/** USB-only CTAP client. No reset, PIN writes, largeBlob or credential-management commands. */
+/** Shared USB/NFC CTAP client. No reset, PIN writes, largeBlob or credential-management commands. */
 final class FidoToken {
     static final String RP = "keepassdx-fido2.ordanexa.com";
     interface Progress { void update(String message); }
-    final Hid hid;
+    final CtapTransport hid;
     final Progress progress;
-    FidoToken(Hid hid, Progress progress) { this.hid = hid; this.progress = progress; }
+    FidoToken(CtapTransport hid, Progress progress) { this.hid = hid; this.progress = progress; }
 
     static final class Credential {
         final byte[] id, publicKey;
@@ -28,7 +28,7 @@ final class FidoToken {
                 throw new IOException("Invalid PIN permissions");
         }
         byte[] request = args.isEmpty() ? new byte[]{(byte)cmd} : Crypto.cat(new byte[]{(byte)cmd}, Cbor.encode(args));
-        byte[] reply = hid.exchange(0x10, request);
+        byte[] reply = hid.cbor(request);
         if (reply.length == 0) throw new IOException("Empty CTAP reply");
         int status = reply[0] & 255;
         if (status != 0) {

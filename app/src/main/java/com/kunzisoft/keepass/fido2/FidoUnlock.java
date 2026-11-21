@@ -4,6 +4,8 @@ import android.app.*;
 import android.content.*;
 import android.hardware.usb.*;
 import android.net.Uri;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
 import android.os.*;
 import android.text.InputType;
 import android.view.*;
@@ -25,7 +27,9 @@ public final class FidoUnlock {
     private final String permissionAction;
     private final Callback callback;
     private volatile int generation;
-    private volatile UsbIo io;
+    private volatile CtapTransport io;
+    private final NfcAdapter nfcAdapter;
+    private boolean nfcMode,readerEnabled,waitingNfc;
     private char[] password;
     private byte[] pendingPin;
     private String database;
@@ -46,6 +50,7 @@ public final class FidoUnlock {
         this.activity=activity;this.callback=callback;
         biometricPin=new BiometricPin(activity);
         manager=(UsbManager)activity.getSystemService(Context.USB_SERVICE);
+        nfcAdapter=NfcAdapter.getDefaultAdapter(activity);
         permissionAction=activity.getPackageName()+".FIDO_USB_PERMISSION";
         IntentFilter filter=new IntentFilter(permissionAction);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
@@ -62,6 +67,18 @@ public final class FidoUnlock {
             }
         }
     };
+    public boolean hasNfc(){return nfcAdapter!=null;}
+    public boolean isNfcMode(){return nfcMode;}
+    public boolean selectNfc(boolean enabled){
+        cancel();
+        if(enabled&&(nfcAdapter==null||!nfcAdapter.isEnabled())){message("NFC in den Android-Einstellungen aktivieren.");return false;}
+        nfcMode=enabled;return true;
+    }
+    public void pauseNfc(){if(readerEnabled)cancel();}
+    private void stopNfcReader(){
+        waitingNfc=false;
+        if(readerEnabled){readerEnabled=false;try{nfcAdapter.disableReaderMode(activity);}catch(RuntimeException ignored){}}
+    }
     public boolean hasConnectedToken(){
         for(UsbDevice d:manager.getDeviceList().values())
             if(d.getVendorId()==0x349e&&d.getProductId()==0x0024)return true;
@@ -134,6 +151,10 @@ public final class FidoUnlock {
                 if(!MessageDigest.isEqual(latest.record.encode(),selectedFingerprint.record.encode()))
                     throw new IOException("Enrollment changed. Please try again.");
             }
+            if(nfcMode){
+                if(nfcAdapter==null||!nfcAdapter.isEnabled())throw new IOException("NFC in den Android-Einstellungen aktivieren.");
+                busy=true;permissionReady();return;
+            }
             List<UsbDevice> matches=new ArrayList<>();
             for(UsbDevice d:manager.getDeviceList().values())if(d.getVendorId()==0x349e&&d.getProductId()==0x0024)matches.add(d);
             if(matches.size()!=1)throw new IOException("Connect exactly one Token2 PIN+ Dual over USB-C.");
@@ -149,7 +170,7 @@ public final class FidoUnlock {
             final int request=generation;
             biometricPin.authenticate(fingerprintEntry,null,new BiometricPin.Callback(){
                 public void complete(byte[] pin){
-                    if(request!=generation||!busy||device==null||!manager.getDeviceList().containsValue(device)){
+                    if(request!=generation||!busy||(!nfcMode&&(device==null||!manager.getDeviceList().containsValue(device)))){
                         Crypto.wipe(pin);cancel();return;
                     }
                     run(pin);
@@ -166,7 +187,7 @@ public final class FidoUnlock {
         pin.setSaveEnabled(false);pin.setSaveFromParentEnabled(false);pin.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         pin.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
         dialog=new AlertDialog.Builder(activity).setTitle(enrolling?"Token hinzufügen":savePinRequested?"Token PIN für Fingerprint speichern":"Unlock with USB token")
-                .setMessage("Enter the token PIN. Touch the token when it blinks. No automatic PIN retries.")
+                .setMessage(nfcMode?"Token PIN eingeben. Danach den Token an die NFC-Antenne halten. Keine automatischen PIN-Wiederholungen.":"Enter the token PIN. Touch the token when it blinks. No automatic PIN retries.")
                 .setView(pin).setNegativeButton("Cancel",(d,w)->cancel()).setPositiveButton("Continue",null).create();
         dialog.setOnCancelListener(d->cancel());dialog.setOnDismissListener(d->pin.getText().clear());
         dialog.getWindow();dialog.show();dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
@@ -181,6 +202,32 @@ public final class FidoUnlock {
         });
     }
     private void run(byte[] pin){
+        if(!nfcMode){execute(pin,null);return;}
+        if(!busy||nfcAdapter==null||!nfcAdapter.isEnabled()){Crypto.wipe(pin);cancel();message("NFC ist nicht verfügbar.");return;}
+        final int request=generation;
+        Crypto.wipe(pendingPin);pendingPin=pin;waitingNfc=true;
+        dialog=new AlertDialog.Builder(activity).setTitle("NFC token")
+                .setMessage("Token an die NFC-Antenne halten und bis zum Abschluss ruhig liegen lassen.")
+                .setNegativeButton("Abbrechen",(d,w)->cancel()).create();
+        dialog.setOnCancelListener(d->cancel());dialog.show();dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        Bundle options=new Bundle();options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY,2000);
+        try{
+            readerEnabled=true;
+            nfcAdapter.enableReaderMode(activity,tag->main.post(()->acceptNfcTag(tag,request)),
+                    NfcAdapter.FLAG_READER_NFC_A|NfcAdapter.FLAG_READER_NFC_B|NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,options);
+            main.postDelayed(()->{if(request==generation&&waitingNfc){cancel();message("NFC scan timed out. Start again when ready.");}},60000);
+        }catch(RuntimeException error){cancel();message("NFC Reader Mode konnte nicht gestartet werden.");}
+    }
+    private void acceptNfcTag(Tag tag,int request){
+        if(request!=generation||!busy||!waitingNfc)return;
+        waitingNfc=false;
+        byte[] pin=pendingPin;pendingPin=null;
+        if(pin==null){cancel();return;}
+        if(dialog!=null){dialog.dismiss();dialog=null;}
+        // Reader Mode remains enabled throughout connect/transceive, just as in FidoParole.
+        execute(pin,tag);
+    }
+    private void execute(byte[] pin,Tag nfcTag){
         final int request=generation;
         final String db=database;
         final Uri requestKeyFile=keyFile;
@@ -190,16 +237,21 @@ public final class FidoUnlock {
         final boolean savePin=savePinRequested;
         final EnrollmentSet.Entry biometricEntry=fingerprintEntry;
         final char[] enrollmentPassword=password;password=null;
-        dialog=new AlertDialog.Builder(activity).setTitle("USB token")
+        dialog=new AlertDialog.Builder(activity).setTitle(nfcTag==null?"USB token":"NFC token")
                 .setMessage("Connecting …").setNegativeButton("Cancel",(d,w)->cancel()).create();
         dialog.setOnCancelListener(d->cancel());dialog.show();dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         worker.execute(()->{
             char[] unlocked=null;byte[] secret=null;UnlockRecord record=null;
             try{
-                UsbIo transport=new UsbIo(manager,selected);io=transport;
+                if(request!=generation)return;
+                CtapTransport transport=nfcTag==null?new Hid(new UsbIo(manager,selected)):
+                        new NfcTransport(new IsoDepChannel(nfcTag),()->main.post(()->{
+                            if(request==generation&&dialog!=null)dialog.setMessage("NFC: Token ruhig an der Antenne halten …");
+                        }));
+                io=transport;
                 if(request!=generation){transport.close();return;}
-                try(Hid hid=new Hid(transport)){
-                    FidoToken token=new FidoToken(hid,text->main.post(()->{if(request==generation&&dialog!=null)dialog.setMessage(text);}));
+                try(CtapTransport hid=transport){
+                    FidoToken token=new FidoToken(hid,text->main.post(()->{if(request==generation&&dialog!=null)dialog.setMessage(nfcTag==null?text:text.replace("touch the token when it blinks.","hold the token against the NFC antenna."));}));
                         if(enroll){
                             FidoToken.Credential credential=token.create(pin,enrolled.credentials());
                             // Public common salt enables one assertion with an allowList. Each
@@ -223,6 +275,7 @@ public final class FidoUnlock {
                 final byte[] verifiedPin=savePin?pin.clone():null;
                 main.post(()->{
                     if(request!=generation||activity.isFinishing()){Arrays.fill(result,'\0');Crypto.wipe(verifiedPin);return;}
+                    if(nfcTag!=null)stopNfcReader();
                     if(dialog!=null){dialog.dismiss();dialog=null;}
                     if(savePin){
                         // Keep the recovered password owned by cancel() while the prompt is visible.
@@ -306,7 +359,8 @@ public final class FidoUnlock {
         keyFile=null;snapshot=null;tokenName=null;
         generation++;busy=false;waitingDatabase=false;pending=null;device=null;
         Crypto.wipe(proofKey);Crypto.wipe(passwordProof);proofKey=null;passwordProof=null;
-        UsbIo active=io;if(active!=null)active.close();
+        CtapTransport active=io;if(active!=null)active.close();
+        stopNfcReader();
         if(password!=null)Arrays.fill(password,'\0');password=null;
         if(dialog!=null){dialog.setOnCancelListener(null);dialog.dismiss();dialog=null;}
     }

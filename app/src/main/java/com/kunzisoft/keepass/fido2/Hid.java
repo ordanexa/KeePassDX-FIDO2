@@ -6,11 +6,11 @@ import java.nio.*;
 import java.util.*;
 
 /** CTAPHID with bounded packets and a per-operation deadline. */
-final class Hid implements AutoCloseable {
+final class Hid implements CtapTransport {
     interface Io extends AutoCloseable {void write(byte[] packet,long deadline)throws Exception;byte[] read(long deadline)throws Exception;void close();}
     final Io io;int channel=-1;
     Hid(Io io){this.io=io;}
-    void init()throws Exception{
+    public void init()throws Exception{
         byte[] nonce=Crypto.random(8),reply=exchange(0x06,nonce);
         if(reply.length!=17||!Arrays.equals(nonce,Arrays.copyOf(reply,8)))throw new IOException("Invalid CTAPHID INIT");
         channel=ByteBuffer.wrap(reply,8,4).getInt();
@@ -33,6 +33,7 @@ final class Hid implements AutoCloseable {
         }
         throw new IOException("Token timeout; reconnect and try again");
     }
+    public byte[] cbor(byte[] request)throws Exception{return exchange(0x10,request);}
     public void close(){io.close();}
 }
 

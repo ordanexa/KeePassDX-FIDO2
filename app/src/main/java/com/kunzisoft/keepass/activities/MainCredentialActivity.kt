@@ -123,7 +123,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
             lastTokenConnected = connected
             fido.cancel()
         }
-        val pinMode = connected && !masterPasswordOverride
+        val pinMode = (connected || fido.isNfcMode) && !masterPasswordOverride
         val changed = pinMode != mainCredentialView.isTokenPinMode
         mainCredentialView.setTokenPinMode(pinMode)
         deviceUnlockButton?.isVisible = false
@@ -140,6 +140,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         keyFilePickerDatabase?.let { outState.putString("fidoKeyFilePickerDatabase", it.toString()) }
+        outState.putBoolean("fidoNfcMode", fidoUnlock?.isNfcMode == true)
         super.onSaveInstanceState(outState)
     }
 
@@ -226,6 +227,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
             }
         }
 
+        if (savedInstanceState?.getBoolean("fidoNfcMode") == true) fidoUnlock?.selectNfc(true)
         refreshFidoInputMode()
 
         mainCredentialView.keyFileSelectionView.setOpenFileClickListener(this, openFileResultLauncher)
@@ -622,7 +624,15 @@ class MainCredentialActivity : DatabaseModeActivity() {
         // Read menu
         inflater.inflate(R.menu.open_file, menu)
         if (fidoUnlock != null) {
-            menu.add(0, FIDO_UNLOCK, 0, "Unlock with USB token")
+            menu.add(0, FIDO_UNLOCK, 0, "USB verwenden").apply {
+                isCheckable = true
+                isChecked = fidoUnlock?.isNfcMode != true
+            }
+            menu.add(0, FIDO_NFC, 1, "NFC verwenden").apply {
+                isCheckable = true
+                isChecked = fidoUnlock?.isNfcMode == true
+                isEnabled = fidoUnlock?.hasNfc() == true
+            }
             menu.add(0, FIDO_ENROLL, 1, "Token hinzufügen")
             menu.add(0, FIDO_REMOVE, 2, "Tokens verwalten")
             menu.add(0, FIDO_FINGERPRINT, 6, "Token + Fingerprint")
@@ -858,10 +868,20 @@ class MainCredentialActivity : DatabaseModeActivity() {
                 mainCredentialView.focusPasswordFieldAndOpenKeyboard()
                 return true
             }
+            FIDO_NFC -> {
+                if (fidoUnlock?.selectNfc(true) == true) {
+                    masterPasswordOverride = false
+                    refreshFidoInputMode()
+                    invalidateOptionsMenu()
+                    mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                }
+                return true
+            }
             FIDO_UNLOCK -> {
-                fidoUnlock?.cancel()
+                fidoUnlock?.selectNfc(false)
                 masterPasswordOverride = false
                 refreshFidoInputMode()
+                invalidateOptionsMenu()
                 if (!mainCredentialView.isTokenPinMode) {
                     Toast.makeText(this, "Token2 per USB-C anschließen.", Toast.LENGTH_LONG).show()
                 }
@@ -909,6 +929,11 @@ class MainCredentialActivity : DatabaseModeActivity() {
         return super.onOptionsItemSelected(item)
     }
 
+    override fun onPause() {
+        fidoUnlock?.pauseNfc()
+        super.onPause()
+    }
+
     override fun onStop() {
         enrollmentDialog?.dismiss()
         tokenMonitorHandler.removeCallbacks(tokenMonitor)
@@ -935,6 +960,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         private const val FIDO_FINGERPRINT = 0x7f0f7107
         private const val FIDO_PIN_SAVE = 0x7f0f7108
         private const val FIDO_PIN_REMOVE = 0x7f0f7109
+        private const val FIDO_NFC = 0x7f0f710a
 
         private val TAG = MainCredentialActivity::class.java.name
 
