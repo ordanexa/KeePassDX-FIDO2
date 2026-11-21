@@ -111,8 +111,19 @@ NFC is optional in the manifest; USB use remains available on devices without NF
 
 The independent Python-authenticator fixture passed 1,933 checks over both USB and a simulated NFC APDU link, including PIN protocols 1/2, fragmented requests/responses, processing polls, wrong PIN, low retry count, missing hmac-secret, UV/UP/RP/credential/signature errors and replay. These are protocol simulations, not RF/hardware tests.
 
-Additional Android/JVM tests cover APDU bounds/status handling/cancellation and Android Reader Mode opt-in, pause cleanup, timeout cleanup and stale-tag rejection. Their CI results and the signed artifact are recorded after build verification.
+Additional Android/JVM tests cover APDU bounds/status handling/cancellation and Android Reader Mode opt-in, pause cleanup, timeout cleanup and stale-tag rejection. The CI run below passed the Android/JVM test task and release assembly on this source.
 
 Physical NFC acceptance is pending: existing enrollment and saved PIN via NFC, manual PIN, explicit enrollment over NFC, required/missing Key Files, token removal during I/O, pause/rotation/cancel, and subsequent USB fallback. Keep the existing USB/master-password recovery paths available.
 
 Protocol references: [FIDO CTAP 2.2, NFC section](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#nfc) and [Android Reader Mode](https://developer.android.com/reference/android/nfc/NfcAdapter#enableReaderMode(android.app.Activity,%20android.nfc.NfcAdapter.ReaderCallback,%20int,%20android.os.Bundle)).
+
+
+### Verified signed 0.1.10 artifact
+
+- [GitHub Actions build 44869348850](https://github.com/ordanexa/fidoparole-android-reader/actions/runs/44869348850) completed successfully: 1,933 protocol checks, Android/JVM FIDO2 tests, release assembly, signing and artifact upload.
+- APK source: `8c8f91ed7332eb951e7a8d7acc37c1334d44c6de` (source marker independently checked).
+- Downloaded ZIP SHA-256 matched GitHub's artifact digest: `f763831f06f877c70617981a9b1e3fc6c75337e4173cede7148d47a31ee78ddb`.
+- APK SHA-256: `ae43f5142bc6bd09aab492bcabbbf424646336299d13df55e5f725efc5770304`.
+- Independently verified APK v3 signature, original signing certificate `707f6d453412ec20afbf0aa498d6c63d07c3d4548688030b45f5cd7b04c8b485`, ZIP alignment, unchanged application ID, version code `45810`, minSdk 33 and targetSdk 36.
+- Only `android.permission.NFC` was added relative to the verified 0.1.9 APK. The complete Token2 MIT license was checked inside the APK assets against the source copy.
+- Install in place. USB device feedback for 0.1.9 is recorded above; physical NFC acceptance is still pending.
