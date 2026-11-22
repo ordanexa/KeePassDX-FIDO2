@@ -154,3 +154,10 @@ Nine JVM policy tests cover the NFC default/manual override, startup prerequisit
 - APK v3 signature and original certificate `707f6d453412ec20afbf0aa498d6c63d07c3d4548688030b45f5cd7b04c8b485` independently verified; ZIP alignment passed. Application ID is unchanged, version code is `45811`, minSdk 33 and targetSdk 36.
 - APK permissions are identical to 0.1.10. The packaged Token2 MIT notice matches the source. The Outbox APK was downloaded again and its SHA-256 matched.
 - Install as an in-place update. Physical acceptance remains pending for automatic fingerprint startup, enabled/disabled NFC defaults, cancellation/manual PIN, explicit USB override, and Key File readiness.
+
+
+## Regular release 0.2.0
+
+The owner reported that the automatic defaults in 0.1.11 work (2026-11-22). The fingerprint token picker now uses **Token wählen** for both NFC and USB. Selection is based on tokens with saved biometric-protected PINs: one eligible token is used directly even when several tokens are enrolled; several eligible tokens retain the explicit named picker. No sequential PIN trials are introduced.
+
+Version 0.2.0 is the first regular release, with no `test` suffix and Android version code `45820`. Its app package, signing identity, enrollment records and encrypted PIN format are unchanged. Device acceptance of the final picker refinement remains open. Build and artifact verification will be recorded after CI.

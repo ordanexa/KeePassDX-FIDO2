@@ -1,53 +1,48 @@
-# KeePassDX-FIDO2 — Android KeePass unlock with FIDO2 hmac-secret
+# KeePassDX-FIDO2 — KeePass for Android with FIDO2, NFC and fingerprint
 
 <img src="art/fido2-icon.svg" width="128" alt="KeePassDX FIDO2 icon">
 
-**Unlock your KeePass database on Android with a Token2 USB security key and its PIN.**
+**Unlock your KeePass database with a Token2 security key over NFC or USB-C, using its PIN or your fingerprint.**
 
-KeePassDX-FIDO2 is Ordanexa's experimental Android password-manager fork with **FIDO2 `hmac-secret` over USB-C and experimental NFC**, support for the **Token2 PIN+ Dual**, optional **Key Files** and up to **five alternative security keys** per database and device. The KDBX stays compatible with standard KeePass clients: this app locally encrypts the master password using a token-derived key; it does not replace the KDBX encryption or enforce a token as a mandatory database factor.
+KeePassDX-FIDO2 is Ordanexa's independent fork of [Kunzisoft/KeePassDX](https://github.com/Kunzisoft/KeePassDX), based on KeePassDX **4.5.8**. It supports **Token2 PIN+ Dual**, FIDO2 `hmac-secret`, optional **Key Files** and up to **five alternative tokens** per database and Android installation. This is not an official Kunzisoft release.
 
-This is an independent, experimental modification of [Kunzisoft/KeePassDX](https://github.com/Kunzisoft/KeePassDX), based on KeePassDX **4.5.8**. It is not an official KeePassDX release.
+The KDBX remains compatible with standard KeePass clients such as KeePassXC. The app encrypts a local copy of the master password using a token-derived key; it does not change the database format or enforce the token as a mandatory database factor.
 
-## Download
+## Download — 0.2.0
 
-**[Download the 0.1.8 test APK](https://github.com/ordanexa/KeePassDX-FIDO2/releases/download/v0.1.8-test/keepassdx-fido2-0.1.8-test.apk)** · [Release notes and downloads](https://github.com/ordanexa/KeePassDX-FIDO2/releases)
+**[Download KeePassDX-FIDO2 0.2.0 APK](https://github.com/ordanexa/KeePassDX-FIDO2/releases/download/v0.2.0/keepassdx-fido2-0.2.0.apk)**
 
-**Current test release: 0.1.8-test**, with up to five named alternative tokens per database and Android installation, individual removal, automatic token selection and preservation of existing single-token enrollment. Includes optional Key Files and the quiet USB handler from 0.1.7. Build, 583 protocol checks, 19 Android unit tests, release lint and signing checks passed. Physical multi-token acceptance remains pending. Earlier releases remain available.
+[Latest release and checksums](https://github.com/ordanexa/KeePassDX-FIDO2/releases/latest) · [All releases](https://github.com/ordanexa/KeePassDX-FIDO2/releases)
 
-Use **Token hinzufügen** and **Tokens verwalten**. See [multiple-token behavior, recovery and tests](docs/fido2-multiple-tokens.md) and [quiet USB behavior](docs/fido2-usb-attach.md). Install over the existing app; do not uninstall or clear its data.
+**0.2.0 is the first regular release**, combining token PIN, biometric-protected PIN storage, NFC/USB unlock and automatic login defaults. Install over the existing FIDO2 app to preserve local enrollment and saved PINs. **Do not uninstall or clear app data.** The package and signing identity remain unchanged.
 
 | Requirement | Supported scope |
 | --- | --- |
-| Android | Android 13 or later, with USB host support |
-| Security key | Token2 PIN+ Dual over USB-C; USB ID `349e:0024` |
-| Token capability | FIDO2 `hmac-secret`, with an existing token PIN |
-| Database | KDBX with Master Password and optional Key File; database credentials remain unchanged |
+| Android | Android 13 or later |
+| Security key | Token2 PIN+ Dual with configured PIN and FIDO2 `hmac-secret` |
+| NFC | NFC-capable Android device with NFC enabled |
+| USB-C | Android USB host support; token USB ID `349e:0024` |
+| Fingerprint login | Strong biometrics, hardware-backed Android Keystore and a saved token PIN for the selected database |
+| Database | KDBX with Master Password and optional Key File |
 | App package | `com.kunzisoft.keepass.fido2` — installs alongside standard KeePassDX |
 
-Install an update over the existing FIDO2 test app to keep its local enrollment. Do not uninstall or clear app data first. Store/F-Droid releases of the original project do **not** include this fork's USB unlock integration.
+## Everyday login
 
-## Automatic login defaults (0.1.11)
+1. Select your database. When NFC is available and enabled, **NFC is selected automatically**; otherwise use USB-C. **USB verwenden** and **NFC verwenden** let you change the connection.
+2. With a saved biometric-protected token PIN, **Token + Fingerprint starts automatically**. If only one token has a saved fingerprint PIN, it is selected directly, even if other tokens are enrolled. With several saved fingerprint PINs, **Token wählen** asks which token to use.
+3. Authorize the fingerprint prompt, then hold the token against the NFC antenna when asked. Over USB-C, connect the token and touch it when prompted.
+4. Without a saved PIN, enter the Token PIN. **Token PIN verwenden** explicitly chooses manual entry. Cancelling the fingerprint prompt enables manual PIN entry without an automatic prompt loop.
 
-On NFC-capable phones with NFC enabled, NFC is now the default connection. For databases with a saved biometric-protected token PIN, **Token + Fingerprint** starts automatically once the selected database's metadata is ready. A cancelled prompt falls back to manual PIN without repeated automatic prompts. **Token PIN verwenden**, **Master Password verwenden**, and explicit USB/NFC selection remain available. See [login defaults and acceptance](docs/fido2-unlock-ui.md#login-defaults-0111-test).
+To enable fingerprint login, first enroll the token using **Token hinzufügen**, then choose **Token PIN für Fingerprint speichern**. The token is still required for every token unlock; fingerprint only releases its locally encrypted PIN. PIN stores remain independent of FidoParole and other apps.
 
-The owner confirmed that NFC token + fingerprint in 0.1.10 unlocks the vault. The signed **0.1.11-test** APK is available from [CI build 45004604569](https://github.com/ordanexa/fidoparole-android-reader/actions/runs/45004604569). Protocol checks, Android/JVM FIDO2 tests and release assembly passed; source marker, checksum, signing identity and APK permissions were independently verified. Physical acceptance of the new automatic startup/default UI remains pending.
+**Master Password verwenden** remains available for recovery. Any Key File required by the database remains required. See [login, NFC and fingerprint details](docs/fido2-unlock-ui.md), [multiple tokens](docs/fido2-multiple-tokens.md) and [Key Files](docs/fido2-key-file.md).
 
-## NFC test build (0.1.10)
-
-Version 0.1.10 adds an experimental **NFC verwenden** option on the login screen. Select NFC, enter the Token PIN or authorize **Token + Fingerprint**, then hold the token to the phone when prompted. **USB verwenden** returns to USB. Enrollment and PIN saving also use the selected connection. Existing local enrollment/PIN records keep their format; physical cross-transport compatibility still needs testing.
-
-NFC reuses Token2 FidoParole Mobile's MIT-licensed ISO-DEP/APDU approach while retaining this fork's existing KeePass-specific authentication and validation. It requires an NFC-capable Android phone and a FIDO2 NFC key with configured PIN and hmac-secret. Reader Mode is active only during an explicitly started operation. See [NFC use, attribution and acceptance](docs/fido2-unlock-ui.md#nfc-transport-0110-test). The owner reported that USB token + fingerprint in 0.1.9 and NFC token + fingerprint in 0.1.10 work on their device; individual NFC negative/recovery cases remain open. The signed **0.1.10-test** artifact is available from [CI build 44869348850](https://github.com/ordanexa/fidoparole-android-reader/actions/runs/44869348850), with source marker, checksum, signing identity and packaged MIT license independently verified.
-
-## Development: token + fingerprint (0.1.9)
-
-The 0.1.9 test build adds **Token + Fingerprint**: save a verified token PIN with a strong biometric, then release that PIN with a fresh biometric authorization while the USB token remains required. Setup is **Token PIN für Fingerprint speichern** in the login menu. A separate button starts subsequent unlocks. With several enrollments, select the connected token by name; no automatic PIN trials occur. Manual PIN and Master Password recovery remain available.
-
-The FIDO2 flavor disables upstream tokenless biometric database unlock. PIN storage is local, encrypted with a per-use biometric Android Keystore key and requires hardware-backed key storage. The signed APK was verified with the existing release identity; the owner reported a successful USB token + fingerprint device test (2026-11-21); individual negative/recovery cases were not exhaustively recorded. See [setup, security boundaries and acceptance](docs/fido2-unlock-ui.md#token--fingerprint-019-development). The download above remains the published **0.1.8** release. The signed **0.1.9-test** artifact is available from [CI build 44819824892](https://github.com/ordanexa/fidoparole-android-reader/actions/runs/44819824892); this is not yet a separate GitHub release.
+The owner confirmed USB token + fingerprint, NFC token + fingerprint and the automatic login defaults on their device. Individual negative/recovery cases and broader device compatibility are not exhaustively validated. The one-saved-PIN selection refinement is included in 0.2.0; its device acceptance remains open.
 
 ## What this fork adds
 
-- **USB token + PIN unlock** after one-time enrollment, without typing the database master password each time.
-- **Automatic input switching:** a connected supported token changes the main field to **Token PIN**; without it, the field is **Master Password**.
+- **NFC/USB token + PIN or fingerprint unlock** after one-time enrollment, without typing the database master password each time.
+- **Automatic input switching:** enabled NFC or a connected supported USB token selects token mode; saved biometric PINs use **Token + Fingerprint** by default.
 - **Master-password fallback even with a token connected**, through **Master Password verwenden** in the menu.
 - **Separate enrollment prompts** for the database master password and token PIN, so enrollment remains available with the token plugged in.
 - **A simplified unlock screen:** the legacy hardware-key/YubiKey row is hidden. From 0.1.6, the Key File and password switches are also hidden; optional Key Files are managed through the login menu.
@@ -74,7 +69,7 @@ Enrollment is saved only after the supplied master password successfully opens t
 
 **Unlock:** select the same database, connect the enrolled token, enter its PIN in **Token PIN**, then use **Open** or the keyboard's Done action. Touch the token when prompted.
 
-**Use the password:** unplug the token or choose **Master Password verwenden**. **Unlock with USB token** switches back to PIN mode.
+**Use the password:** choose **Master Password verwenden**. **USB verwenden** or **NFC verwenden** switches back to token mode.
 
 **Keep your master password and any required Key File.** Together they remain a valid way to unlock the unchanged KDBX, including in desktop clients such as KeePassXC. If the KDBX requires a Key File, the password alone is insufficient. This is not mandatory token enforcement on the database.
 
@@ -92,16 +87,16 @@ Enrollment is saved only after the supplied master password successfully opens t
 
 The PIN authorizes a FIDO2 operation on the token; it is not the KDBX password. The token's `hmac-secret` output is passed through HKDF-SHA256 to derive an AES-256-GCM key. That key encrypts a local copy of the database master password. After token authorization, the app decrypts the password and supplies it to KeePassDX's existing database-opening pipeline.
 
-The enrollment record is stored in the app's private `filesDir/fido2-v1` directory and bound to the database URI and credential metadata. The FIDO2 variant disables app backup and excludes app data from configured backup/transfer mechanisms. The integration never persists a plaintext PIN or plaintext copy of the master password. The 0.1.9 development feature can optionally persist the PIN encrypted under a hardware-backed, per-use biometric Android Keystore key. An unlocked app necessarily handles the recovered password in memory.
+The enrollment record is stored in the app's private `filesDir/fido2-v1` directory and bound to the database URI and credential metadata. The FIDO2 variant disables app backup and excludes app data from configured backup/transfer mechanisms. The integration never persists a plaintext PIN or plaintext copy of the master password. Fingerprint login can optionally persist the PIN encrypted under a hardware-backed, per-use biometric Android Keystore key. An unlocked app necessarily handles the recovered password in memory.
 
 ## Scope and validation
 
-- USB-C and experimental NFC/ISO-DEP from 0.1.10; physical NFC acceptance remains pending.
+- USB-C and NFC/ISO-DEP; USB and NFC fingerprint unlock have owner-reported successful device tests.
 - Other security-key models are not currently supported by the device filter.
 - Optional Key Files are included from 0.1.6; physical-device validation is pending. From 0.1.8, up to five alternative tokens can be enrolled; connect only one USB token at a time.
 - From 0.1.8, up to five named enrollments per database URI per Android installation. Adding a token preserves existing ones. Each device requires its own enrollment; synchronizing the KDBX alone does not transfer token unlock.
 - Failed PIN authentication is not retried automatically.
-- **Experimental test build, not an independently security-audited release.** Java/Android cannot guarantee complete memory zeroization.
+- **This fork has not undergone an independent security audit.** Java/Android cannot guarantee complete memory zeroization.
 
 The owner reported successful device use of enrollment, persistent unlock and the 0.1.3 login UI. This does not establish compatibility with other devices or complete all negative/recovery tests.
 

@@ -117,9 +117,9 @@ public final class FidoUnlock {
             List<EnrollmentSet.Entry> saved=new ArrayList<>();
             for(EnrollmentSet.Entry entry:current.entries)if(biometricPin.has(entry.record))saved.add(entry);
             if(saved.isEmpty()){message("Zuerst im Menü Token PIN für Fingerprint speichern wählen.");return;}
-            if(current.entries.size()==1){begin(uri,null,false,null,selectedKeyFile,null,false,saved.get(0));return;}
+            if(saved.size()==1){begin(uri,null,false,null,selectedKeyFile,null,false,saved.get(0));return;}
             String[] names=new String[saved.size()];for(int i=0;i<names.length;i++)names[i]=saved.get(i).name;
-            dialog=new AlertDialog.Builder(activity).setTitle("Angeschlossenen Token wählen")
+            dialog=new AlertDialog.Builder(activity).setTitle("Token wählen")
                     .setItems(names,(d,which)->begin(uri,null,false,null,selectedKeyFile,null,false,saved.get(which)))
                     .setNegativeButton("Abbrechen",(d,w)->cancel()).create();
             dialog.setOnCancelListener(d->cancel());dialog.show();
