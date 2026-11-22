@@ -81,6 +81,9 @@ class MainCredentialViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun assignDatabaseUri(databaseUri: Uri?) {
+        if (databaseFileUri != databaseUri) {
+            _databaseFileUIState.update { it.copy(loading = true, databaseUri = null) }
+        }
         databaseFileUri = databaseUri
         checkIfIsDefaultDatabase()
     }
@@ -95,6 +98,7 @@ class MainCredentialViewModel(application: Application) : AndroidViewModel(appli
     ) {
         databaseFileUri?.let { databaseUri ->
             mFileDatabaseHistoryAction?.getDatabaseFile(databaseUri) { databaseFile ->
+                if (databaseFileUri != databaseUri) return@getDatabaseFile
                 // Force read only if the file does not exist
                 val databaseFileExists = databaseFile?.databaseFileExists ?: false
                 mForceReadOnly = !databaseFileExists
@@ -134,6 +138,7 @@ class MainCredentialViewModel(application: Application) : AndroidViewModel(appli
                 _databaseFileUIState.update {
                     it.copy(
                         loading = false,
+                        databaseUri = databaseUri,
                         showFileRevokedErrorMessage = !databaseFileExists,
                         fileName = fileName,
                         keyFileUri = keyFileUri,
@@ -268,6 +273,7 @@ class MainCredentialViewModel(application: Application) : AndroidViewModel(appli
     }
 
     data class DatabaseFileUIState(
+        val databaseUri: Uri? = null,
         val loading: Boolean = false,
         val showFileRevokedErrorMessage: Boolean = false,
         val confirmButtonEnabled: Boolean = false,

@@ -100,6 +100,9 @@ import java.nio.CharBuffer
 class MainCredentialActivity : DatabaseModeActivity() {
 
     private var fidoUnlock: com.kunzisoft.keepass.fido2.FidoUnlock? = null
+    private val fidoLoginPolicy = com.kunzisoft.keepass.fido2.FidoLoginPolicy()
+    private var fidoTransportOverride: Boolean? = null
+    private var fidoMetadataDatabase: Uri? = null
 
     private val keyFileAssociations by lazy { com.kunzisoft.keepass.fido2.KeyFileAssociation(this) }
     private var keyFilePickerDatabase: Uri? = null
@@ -117,11 +120,19 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
     private fun refreshFidoInputMode(): Boolean {
         val fido = fidoUnlock ?: return false
+        val preferNfc = com.kunzisoft.keepass.fido2.FidoLoginPolicy.preferNfc(fidoTransportOverride, fido.isNfcReady)
+        val transportChanged = preferNfc != fido.isNfcMode
+        if (transportChanged) {
+            fido.selectNfc(preferNfc)
+            invalidateOptionsMenu()
+        }
         val connected = fido.hasConnectedToken()
         if (connected != lastTokenConnected) {
-            masterPasswordOverride = false
             lastTokenConnected = connected
-            fido.cancel()
+            if (!fido.isNfcMode) {
+                masterPasswordOverride = false
+                fido.cancel()
+            }
         }
         val pinMode = (connected || fido.isNfcMode) && !masterPasswordOverride
         val changed = pinMode != mainCredentialView.isTokenPinMode
@@ -135,12 +146,54 @@ class MainCredentialActivity : DatabaseModeActivity() {
             }
             invalidateOptionsMenu()
         }
+        if (changed || transportChanged) mainCredentialView.post { attemptAutomaticFidoLogin() }
         return changed
+    }
+
+    private fun updateFidoLoginControls(): Boolean {
+        val fido = fidoUnlock ?: return false
+        val database = mMainCredentialViewModel.databaseFileUri
+        val metadataReady = database != null && fidoMetadataDatabase == database
+        val fingerprintDefault = mainCredentialView.isTokenPinMode &&
+                fidoLoginPolicy.prefersFingerprint(fido.hasSavedPin(database))
+        confirmButtonView?.isEnabled = mMainCredentialViewModel.databaseFileUIState.value.confirmButtonEnabled ||
+                (metadataReady && fingerprintDefault)
+        fidoFingerprintButton?.isEnabled = metadataReady
+        return fingerprintDefault
+    }
+
+    private fun startFidoFingerprint() {
+        val fido = fidoUnlock ?: return
+        val database = mMainCredentialViewModel.databaseFileUri ?: return
+        if (fidoMetadataDatabase != database || fido.isBusy || enrollmentDialog != null) return
+        fidoLoginPolicy.useFingerprint()
+        masterPasswordOverride = false
+        refreshFidoInputMode()
+        mainCredentialView.populatePasswordTextView(null)
+        (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+            ?.hideSoftInputFromWindow(mainCredentialView.windowToken, 0)
+        fido.beginFingerprint(database, mainCredentialView.selectedKeyFile())
+        updateFidoLoginControls()
+    }
+
+    private fun attemptAutomaticFidoLogin() {
+        val fido = fidoUnlock ?: return
+        val database = mMainCredentialViewModel.databaseFileUri ?: return
+        if (!fidoLoginPolicy.isAutomaticPending || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            || fidoMetadataDatabase != database || !mainCredentialView.isTokenPinMode
+            || mMainCredentialViewModel.databaseFileUIState.value.showFileRevokedErrorMessage
+            || fido.isBusy || enrollmentDialog != null) return
+        if (fidoLoginPolicy.claimAutomatic(true, true, true, fido.hasSavedPin(database), false)) {
+            startFidoFingerprint()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         keyFilePickerDatabase?.let { outState.putString("fidoKeyFilePickerDatabase", it.toString()) }
-        outState.putBoolean("fidoNfcMode", fidoUnlock?.isNfcMode == true)
+        fidoTransportOverride?.let { outState.putBoolean("fidoTransportOverride", it) }
+        outState.putString("fidoAutoDatabase", fidoLoginPolicy.database)
+        outState.putBoolean("fidoAutoUsed", fidoLoginPolicy.isAutomaticUsed)
+        outState.putBoolean("fidoManualPin", fidoLoginPolicy.isManualPin)
         super.onSaveInstanceState(outState)
     }
 
@@ -193,6 +246,12 @@ class MainCredentialActivity : DatabaseModeActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         keyFilePickerDatabase = savedInstanceState?.getString("fidoKeyFilePickerDatabase")?.let(Uri::parse)
+        if (savedInstanceState != null) {
+            fidoTransportOverride = if (savedInstanceState.containsKey("fidoTransportOverride"))
+                savedInstanceState.getBoolean("fidoTransportOverride") else null
+            fidoLoginPolicy.restore(savedInstanceState.getString("fidoAutoDatabase"),
+                savedInstanceState.getBoolean("fidoAutoUsed"), savedInstanceState.getBoolean("fidoManualPin"))
+        }
 
         setContentView(R.layout.activity_main_credential)
 
@@ -206,10 +265,8 @@ class MainCredentialActivity : DatabaseModeActivity() {
         logotypeButton = findViewById(R.id.activity_password_logotype)
         deviceUnlockButton = findViewById(R.id.fragment_device_unlock_container_view)
         fidoFingerprintButton = findViewById(R.id.fido_fingerprint_button)
-        fidoFingerprintButton?.setOnClickListener {
-            mainCredentialView.populatePasswordTextView(null)
-            fidoUnlock?.beginFingerprint(mMainCredentialViewModel.databaseFileUri, mainCredentialView.selectedKeyFile())
-        }
+        fidoFingerprintButton?.isEnabled = false
+        fidoFingerprintButton?.setOnClickListener { startFidoFingerprint() }
         mainCredentialView = findViewById(R.id.activity_password_credentials)
         confirmButtonView = findViewById(R.id.activity_password_open_button)
         infoContainerView = findViewById(R.id.activity_password_info_container)
@@ -225,9 +282,15 @@ class MainCredentialActivity : DatabaseModeActivity() {
                     specialMode = mSpecialMode
                 )
             }
+            fidoUnlock?.setFingerprintFallback {
+                fidoLoginPolicy.useManualPin()
+                masterPasswordOverride = false
+                refreshFidoInputMode()
+                updateFidoLoginControls()
+                mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+            }
         }
 
-        if (savedInstanceState?.getBoolean("fidoNfcMode") == true) fidoUnlock?.selectNfc(true)
         refreshFidoInputMode()
 
         mainCredentialView.keyFileSelectionView.setOpenFileClickListener(this, openFileResultLauncher)
@@ -252,9 +315,15 @@ class MainCredentialActivity : DatabaseModeActivity() {
         fun loadDatabase() {
             if (refreshFidoInputMode()) return
             if (mainCredentialView.isTokenPinMode) {
+                if (fidoLoginPolicy.prefersFingerprint(fidoUnlock?.hasSavedPin(mMainCredentialViewModel.databaseFileUri) == true)) {
+                    startFidoFingerprint()
+                    return
+                }
+                fidoLoginPolicy.suppressAutomatic()
                 fidoUnlock?.beginWithPin(mMainCredentialViewModel.databaseFileUri, mainCredentialView.takeTokenPin(), mainCredentialView.selectedKeyFile())
                 return
             }
+            if (fidoUnlock != null) fidoLoginPolicy.suppressAutomatic()
             fidoUnlock?.cancel()
             mMainCredentialViewModel.loadDatabase(
                 mainCredential = mainCredentialView.getMainCredential(),
@@ -274,7 +343,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         val launchImmediately = intent.getBooleanExtra(KEY_LAUNCH_IMMEDIATELY, false)
         intent.removeExtra(KEY_LAUNCH_IMMEDIATELY)
         if (launchImmediately) {
-            loadDatabase()
+            if (fidoUnlock?.hasSavedPin(mMainCredentialViewModel.databaseFileUri) != true) loadDatabase()
         } else {
             // Init Biometric elements
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !mainCredentialView.isTokenPinMode) {
@@ -294,6 +363,8 @@ class MainCredentialActivity : DatabaseModeActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     mMainCredentialViewModel.databaseFileUIState.collect { state ->
+                        if (fidoUnlock != null && (state.loading || state.databaseUri != mMainCredentialViewModel.databaseFileUri)) return@collect
+                        fidoMetadataDatabase = state.databaseUri
                         infoContainerView?.isVisible = state.showFileRevokedErrorMessage
                         filenameView?.text = state.fileName
                         if (fidoUnlock != null) {
@@ -308,7 +379,8 @@ class MainCredentialActivity : DatabaseModeActivity() {
                         // Enable or not the open button if setting is checked
                         confirmButtonView?.isEnabled = state.confirmButtonEnabled
                         invalidateOptionsMenu()
-                        mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                        if (!updateFidoLoginControls() && fidoUnlock?.isBusy != true) mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                        mainCredentialView.post { attemptAutomaticFidoLogin() }
                     }
                 }
                 launch {
@@ -448,6 +520,8 @@ class MainCredentialActivity : DatabaseModeActivity() {
             specialMode = mSpecialMode,
             typeMode = mTypeMode
         )
+        updateFidoLoginControls()
+        mainCredentialView.post { attemptAutomaticFidoLogin() }
     }
 
     override fun onDatabaseRetrieved(database: ContextualDatabase) {
@@ -526,6 +600,11 @@ class MainCredentialActivity : DatabaseModeActivity() {
         keyFileUri: Uri?,
         hardwareKey: HardwareKey?
     ) {
+        if (fidoLoginPolicy.database != databaseUri?.toString()) {
+            fidoMetadataDatabase = null
+            masterPasswordOverride = false
+        }
+        fidoLoginPolicy.selectDatabase(databaseUri?.toString())
         mMainCredentialViewModel.assignDatabaseUri(databaseUri)
         mainCredentialView.populateKeyFileView(
             if (fidoUnlock != null) keyFileAssociations.resolve(databaseUri, keyFileUri) else keyFileUri
@@ -636,6 +715,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
             menu.add(0, FIDO_ENROLL, 1, "Token hinzufügen")
             menu.add(0, FIDO_REMOVE, 2, "Tokens verwalten")
             menu.add(0, FIDO_FINGERPRINT, 6, "Token + Fingerprint")
+            menu.add(0, FIDO_MANUAL_PIN, 6, "Token PIN verwenden")
             menu.add(0, FIDO_PIN_SAVE, 7, "Token PIN für Fingerprint speichern")
             menu.add(0, FIDO_PIN_REMOVE, 8, "Gespeicherte Token PINs entfernen")
             menu.add(0, FIDO_MASTER_PASSWORD, 3, "Master Password verwenden")
@@ -828,26 +908,38 @@ class MainCredentialActivity : DatabaseModeActivity() {
 
         when (item.itemId) {
             FIDO_FINGERPRINT -> {
-                mainCredentialView.populatePasswordTextView(null)
-                fidoUnlock?.beginFingerprint(mMainCredentialViewModel.databaseFileUri, mainCredentialView.selectedKeyFile())
+                startFidoFingerprint()
+                return true
+            }
+            FIDO_MANUAL_PIN -> {
+                fidoLoginPolicy.useManualPin()
+                fidoUnlock?.cancel()
+                masterPasswordOverride = false
+                refreshFidoInputMode()
+                updateFidoLoginControls()
+                mainCredentialView.focusPasswordFieldAndOpenKeyboard()
                 return true
             }
             FIDO_PIN_SAVE -> {
+                fidoLoginPolicy.suppressAutomatic()
                 mainCredentialView.populatePasswordTextView(null)
                 fidoUnlock?.beginSavePin(mMainCredentialViewModel.databaseFileUri, mainCredentialView.selectedKeyFile())
                 return true
             }
             FIDO_PIN_REMOVE -> {
+                fidoLoginPolicy.suppressAutomatic()
                 fidoUnlock?.removeSavedPins(mMainCredentialViewModel.databaseFileUri)
                 return true
             }
             FIDO_KEY_FILE -> {
+                fidoLoginPolicy.suppressAutomatic()
                 fidoUnlock?.cancel()
                 keyFilePickerDatabase = mMainCredentialViewModel.databaseFileUri
                 if (keyFilePickerDatabase != null) openFileResultLauncher.openDocument.launch(arrayOf("*/*"))
                 return true
             }
             FIDO_KEY_FILE_REMOVE -> {
+                fidoLoginPolicy.suppressAutomatic()
                 val database = mMainCredentialViewModel.databaseFileUri ?: return true
                 AlertDialog.Builder(this).setTitle("Key File-Zuordnung entfernen?")
                     .setMessage("Dies entfernt nur den gespeicherten Dateiverweis. Eine mit Key File geschützte Datenbank benötigt weiterhin dieselbe Datei. Die Datei wird nicht gelöscht.")
@@ -861,6 +953,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
                 return true
             }
             FIDO_MASTER_PASSWORD -> {
+                fidoLoginPolicy.suppressAutomatic()
                 refreshFidoInputMode()
                 fidoUnlock?.cancel()
                 masterPasswordOverride = true
@@ -870,14 +963,19 @@ class MainCredentialActivity : DatabaseModeActivity() {
             }
             FIDO_NFC -> {
                 if (fidoUnlock?.selectNfc(true) == true) {
+                    fidoTransportOverride = true
+                    fidoLoginPolicy.useDefaultMethod()
                     masterPasswordOverride = false
                     refreshFidoInputMode()
                     invalidateOptionsMenu()
-                    mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                    if (!updateFidoLoginControls()) mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                    mainCredentialView.post { attemptAutomaticFidoLogin() }
                 }
                 return true
             }
             FIDO_UNLOCK -> {
+                fidoTransportOverride = false
+                fidoLoginPolicy.useDefaultMethod()
                 fidoUnlock?.selectNfc(false)
                 masterPasswordOverride = false
                 refreshFidoInputMode()
@@ -885,14 +983,17 @@ class MainCredentialActivity : DatabaseModeActivity() {
                 if (!mainCredentialView.isTokenPinMode) {
                     Toast.makeText(this, "Token2 per USB-C anschließen.", Toast.LENGTH_LONG).show()
                 }
-                mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                if (!updateFidoLoginControls()) mainCredentialView.focusPasswordFieldAndOpenKeyboard()
+                mainCredentialView.post { attemptAutomaticFidoLogin() }
                 return true
             }
             FIDO_ENROLL -> {
+                fidoLoginPolicy.suppressAutomatic()
                 showFidoEnrollmentPassword()
                 return true
             }
             FIDO_REMOVE -> {
+                fidoLoginPolicy.suppressAutomatic()
                 fidoUnlock?.remove(mMainCredentialViewModel.databaseFileUri)
                 return true
             }
@@ -961,6 +1062,7 @@ class MainCredentialActivity : DatabaseModeActivity() {
         private const val FIDO_PIN_SAVE = 0x7f0f7108
         private const val FIDO_PIN_REMOVE = 0x7f0f7109
         private const val FIDO_NFC = 0x7f0f710a
+        private const val FIDO_MANUAL_PIN = 0x7f0f710b
 
         private val TAG = MainCredentialActivity::class.java.name
 

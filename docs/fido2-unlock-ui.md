@@ -127,3 +127,19 @@ Protocol references: [FIDO CTAP 2.2, NFC section](https://fidoalliance.org/specs
 - Independently verified APK v3 signature, original signing certificate `707f6d453412ec20afbf0aa498d6c63d07c3d4548688030b45f5cd7b04c8b485`, ZIP alignment, unchanged application ID, version code `45810`, minSdk 33 and targetSdk 36.
 - Only `android.permission.NFC` was added relative to the verified 0.1.9 APK. The complete Token2 MIT license was checked inside the APK assets against the source copy.
 - Install in place. USB device feedback for 0.1.9 is recorded above; physical NFC acceptance is still pending.
+
+
+## Device feedback: NFC 0.1.10 (2026-11-22)
+
+The owner reported that token NFC + fingerprint successfully unlocks the vault. UI and operating-flow refinements remain open. This is owner-reported functional acceptance; individual negative/recovery tests and the exact handset were not enumerated.
+
+## Login defaults: 0.1.11-test
+
+- An NFC-capable device with NFC enabled defaults to NFC on each fresh login screen. With NFC unavailable/disabled, USB remains selected. A manual **USB verwenden** or **NFC verwenden** choice overrides the default for the current screen and survives recreation; it is not a global preference.
+- For a selected database with a saved biometric-protected token PIN and available strong biometrics, **Token + Fingerprint** is the default method. A phone fingerprint alone, without a saved token PIN, does not qualify.
+- After matching database metadata and any Key File association are ready and the screen is resumed, the fingerprint flow starts once automatically. For USB, it waits for the connected token; for NFC, the fingerprint step precedes the tag scan. Open/keyboard Done also use the default method.
+- Cancellation or biometric failure exposes manual PIN input and suppresses automatic re-prompting for this login. **Token PIN verwenden** explicitly selects manual PIN; **Master Password verwenden** keeps recovery available. The Fingerprint button can retry explicitly. Setup/management/recovery actions suppress background automatic prompts. An explicit transport choice can request one fresh default attempt.
+- Automatic-attempt/manual-PIN state survives recreation. Repeated UI emissions, polling and resume events do not create prompt loops. Multiple saved tokens still use the existing named selection; no PINs are tried in sequence.
+- Database metadata now carries the database URI. Late callbacks for an old selection are ignored; automatic startup cannot consume a previous database's Key File or read/write configuration. A file-revoked warning blocks automatic startup, while explicit manual recovery remains available.
+
+Nine JVM policy tests cover the NFC default/manual override, startup prerequisites, one-time prompts, saved-PIN requirement, cancellation/manual fallback, setup/recovery suppression, database switching, recreation and explicit transport retries. Android build and signed-artifact verification are recorded after CI. Physical acceptance of these new UI defaults remains pending; the underlying USB/NFC/fingerprint device feedback above remains valid.

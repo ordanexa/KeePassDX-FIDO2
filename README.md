@@ -26,6 +26,12 @@ Use **Token hinzufügen** and **Tokens verwalten**. See [multiple-token behavior
 
 Install an update over the existing FIDO2 test app to keep its local enrollment. Do not uninstall or clear app data first. Store/F-Droid releases of the original project do **not** include this fork's USB unlock integration.
 
+## Automatic login defaults (0.1.11)
+
+On NFC-capable phones with NFC enabled, NFC is now the default connection. For databases with a saved biometric-protected token PIN, **Token + Fingerprint** starts automatically once the selected database's metadata is ready. A cancelled prompt falls back to manual PIN without repeated automatic prompts. **Token PIN verwenden**, **Master Password verwenden**, and explicit USB/NFC selection remain available. See [login defaults and acceptance](docs/fido2-unlock-ui.md#login-defaults-0111-test).
+
+The owner confirmed that NFC token + fingerprint in 0.1.10 unlocks the vault. Physical acceptance of the new automatic startup/default UI remains pending.
+
 ## NFC test build (0.1.10)
 
 Version 0.1.10 adds an experimental **NFC verwenden** option on the login screen. Select NFC, enter the Token PIN or authorize **Token + Fingerprint**, then hold the token to the phone when prompted. **USB verwenden** returns to USB. Enrollment and PIN saving also use the selected connection. Existing local enrollment/PIN records keep their format; physical cross-transport compatibility still needs testing.

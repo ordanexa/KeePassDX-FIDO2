@@ -45,6 +45,7 @@ public final class FidoUnlock {
     private final BiometricPin biometricPin;
     private boolean savePinRequested;
     private EnrollmentSet.Entry fingerprintEntry;
+    private Runnable fingerprintFallback=()->{};
 
     public FidoUnlock(Activity activity,Callback callback) {
         this.activity=activity;this.callback=callback;
@@ -68,6 +69,16 @@ public final class FidoUnlock {
         }
     };
     public boolean hasNfc(){return nfcAdapter!=null;}
+    public boolean isNfcReady(){return nfcAdapter!=null&&nfcAdapter.isEnabled();}
+    public boolean isBusy(){return busy||(dialog!=null&&dialog.isShowing());}
+    public void setFingerprintFallback(Runnable action){fingerprintFallback=action;}
+    public boolean hasSavedPin(Uri uri){
+        if(uri==null||!BiometricPin.available(activity))return false;
+        try{for(EnrollmentSet.Entry entry:EnrollmentStorage.read(activity,uri.toString()).entries)
+            if(biometricPin.has(entry.record))return true;
+        }catch(Exception ignored){}
+        return false;
+    }
     public boolean isNfcMode(){return nfcMode;}
     public boolean selectNfc(boolean enabled){
         cancel();
@@ -175,7 +186,7 @@ public final class FidoUnlock {
                     }
                     run(pin);
                 }
-                public void failed(){if(request==generation){cancel();message("Token PIN kann weiterhin manuell eingegeben werden.");}}
+                public void failed(){if(request==generation){cancel();fingerprintFallback.run();message("Token PIN kann weiterhin manuell eingegeben werden.");}}
             });
         }else promptPin();
     }
