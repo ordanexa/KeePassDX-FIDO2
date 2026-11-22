@@ -142,4 +142,15 @@ The owner reported that token NFC + fingerprint successfully unlocks the vault. 
 - Automatic-attempt/manual-PIN state survives recreation. Repeated UI emissions, polling and resume events do not create prompt loops. Multiple saved tokens still use the existing named selection; no PINs are tried in sequence.
 - Database metadata now carries the database URI. Late callbacks for an old selection are ignored; automatic startup cannot consume a previous database's Key File or read/write configuration. A file-revoked warning blocks automatic startup, while explicit manual recovery remains available.
 
-Nine JVM policy tests cover the NFC default/manual override, startup prerequisites, one-time prompts, saved-PIN requirement, cancellation/manual fallback, setup/recovery suppression, database switching, recreation and explicit transport retries. Android build and signed-artifact verification are recorded after CI. Physical acceptance of these new UI defaults remains pending; the underlying USB/NFC/fingerprint device feedback above remains valid.
+Nine JVM policy tests cover the NFC default/manual override, startup prerequisites, one-time prompts, saved-PIN requirement, cancellation/manual fallback, setup/recovery suppression, database switching, recreation and explicit transport retries. Android build and signed-artifact verification are recorded below. Physical acceptance of these new UI defaults remains pending; the underlying USB/NFC/fingerprint device feedback above remains valid.
+
+
+### Verified signed 0.1.11 artifact
+
+- [GitHub Actions build 45004604569](https://github.com/ordanexa/fidoparole-android-reader/actions/runs/45004604569) passed 1,933 protocol checks, the Android/JVM FIDO2 test task, release assembly, signing and artifact upload. The nine new policy tests also passed independently on the local JVM.
+- APK source: `19bc913b095e79292a57289166404608483af9e4`; the archive source marker was checked.
+- Downloaded ZIP SHA-256 matched GitHub's artifact digest: `ac9926bd24da9511f63955149d73a6d4cf1609534f12f52af9850988534f7d0d`.
+- APK SHA-256: `ef077890757b31a51171a46bd885dddbf3dff8a71282854dd1052ffe51f769dd`.
+- APK v3 signature and original certificate `707f6d453412ec20afbf0aa498d6c63d07c3d4548688030b45f5cd7b04c8b485` independently verified; ZIP alignment passed. Application ID is unchanged, version code is `45811`, minSdk 33 and targetSdk 36.
+- APK permissions are identical to 0.1.10. The packaged Token2 MIT notice matches the source. The Outbox APK was downloaded again and its SHA-256 matched.
+- Install as an in-place update. Physical acceptance remains pending for automatic fingerprint startup, enabled/disabled NFC defaults, cancellation/manual PIN, explicit USB override, and Key File readiness.
