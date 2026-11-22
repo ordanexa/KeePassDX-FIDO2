@@ -1,0 +1,42 @@
+name: Publish KeePassDX-FIDO2 0.2.0
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/fido2-hmac-secret]
+    paths: [.github/workflows/publish-0.2.0.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: publish-keepassdx-0.2.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'ordanexa/KeePassDX-FIDO2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download pinned signed build
+        run: |
+          set -euo pipefail
+          gh api repos/ordanexa/fidoparole-android-reader/actions/artifacts/14748172714/zip > artifact.zip
+          echo '745ce162dcc0303c60cdd625d7e7b959f22fb0854958ec02608937b750eff9b4  artifact.zip' | sha256sum -c -
+          python3 - <<'PYTHON'
+          import zipfile, pathlib, hashlib
+          expected = {'keepassdx-fido2-0.2.0.apk', 'keepassdx-fido2-0.2.0.apk.idsig', 'SOURCE_COMMIT', 'SHA256SUMS'}
+          with zipfile.ZipFile('artifact.zip') as archive:
+              assert set(archive.namelist()) == expected
+              assert archive.read('SOURCE_COMMIT').decode().strip() == '6728fc9acbec44de1c8d4acee7d1f1e8fd8752ac'
+              apk = archive.read('keepassdx-fido2-0.2.0.apk')
+              assert hashlib.sha256(apk).hexdigest() == '7a9777fba23d7380b6e854f17168bc5264986140781772b9ffc5fee26aa66d67'
+              for name in ['keepassdx-fido2-0.2.0.apk', 'SHA256SUMS', 'SOURCE_COMMIT']:
+                  pathlib.Path(name).write_bytes(archive.read(name))
+          PYTHON
+          sha256sum -c SHA256SUMS
+      - name: Publish regular latest release
+        run: |
+          set -euo pipefail
+          gh api repos/ordanexa/KeePassDX-FIDO2/contents/docs/releases/0.2.0.md?ref=${{ github.sha }} --jq '.content' | base64 --decode > RELEASE_NOTES.md
+          gh release create v0.2.0 --repo ordanexa/KeePassDX-FIDO2 --target 6728fc9acbec44de1c8d4acee7d1f1e8fd8752ac --title 'KeePassDX-FIDO2 0.2.0 — NFC, USB and Fingerprint' --latest --notes-file RELEASE_NOTES.md keepassdx-fido2-0.2.0.apk SHA256SUMS SOURCE_COMMIT

@@ -57,17 +57,17 @@ The underlying KeePassDX editor, groups, entries, search, Autofill, Magikeyboard
 
 1. Back up your KDBX and keep its master password in a safe, independent place.
 2. Install the FIDO2 APK and select your database. From 0.1.6, if the database requires a Key File, associate that file through **Key File zuordnen** before enrollment. Earlier releases support the password-only flow.
-3. Connect the Token2 PIN+ Dual by USB-C.
+3. Choose NFC with NFC enabled, or connect the Token2 PIN+ Dual by USB-C and select **USB verwenden**.
 4. Open the menu and choose **Token hinzufügen** (called **Enroll USB token** through 0.1.7).
 5. Enter the **database master password** in the separate enrollment dialog.
-6. Grant the Android USB permission when requested, enter the **token PIN**, and touch the token when prompted.
+6. Enter the **token PIN**. For NFC, hold the token against the antenna when asked. For USB, grant the Android USB permission and touch the token when prompted.
 7. After successful enrollment, lock the database and verify token unlock.
 
 Enrollment is saved only after the supplied master password successfully opens the matching database.
 
 ## Everyday use and recovery
 
-**Unlock:** select the same database, connect the enrolled token, enter its PIN in **Token PIN**, then use **Open** or the keyboard's Done action. Touch the token when prompted.
+**Unlock:** follow the automatic fingerprint flow described above, or select **Token PIN verwenden**, enter the token PIN and press **Open**. Present the enrolled token over the selected NFC/USB connection when asked.
 
 **Use the password:** choose **Master Password verwenden**. **USB verwenden** or **NFC verwenden** switches back to token mode.
 
